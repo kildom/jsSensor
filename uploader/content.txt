@@ -1,0 +1,1 @@
+Firmware for device that transferrs content from PC via UART to bootloader via OTA update protocol
