@@ -1,0 +1,4 @@
+GNU Arm Embedded Toolchain
+https://developer.arm.com/tools-and-software/open-source-software/developer-tools/gnu-toolchain/gnu-rm
+
+Needed only if there is no toolchain in PATH.

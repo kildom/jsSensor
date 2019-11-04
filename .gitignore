@@ -1,0 +1,10 @@
+/CMSIS/
+/gcc/
+/mdk/
+*.o
+*.elf
+*.hex
+*.lst
+*.lss
+*.map
+!content.txt

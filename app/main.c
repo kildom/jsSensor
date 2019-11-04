@@ -1,4 +1,11 @@
 
+int main()
+{
+    return 0;
+}
+
+#if 0
+
 #include <stdlib.h>
 #include <stdint.h>
 #include <stdbool.h>
@@ -281,3 +288,5 @@ int main_old()
         
     }
 }
+
+#endif
