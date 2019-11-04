@@ -3,11 +3,18 @@
 
 
 TARGET   = sensor
-INCLUDE  = -I../mdk -I../CMSIS/CMSIS/Core/Include/
+INCLUDE  = -I../mdk -I../CMSIS/CMSIS/Core/Include \
+	-I../FreeRTOS/Source/include \
+	-I. \
+	-I../FreeRTOS/Source/portable/GCC/ARM_CM0
 CFLAGS   = -O0 -g3 -fdata-sections -ffunction-sections -Wl,--gc-sections -fno-strict-aliasing -fshort-enums -D__HEAP_SIZE=8192 -D__STACK_SIZE=8192
 LIBS     = -L../mdk -lc -lnosys -lm
 
-OBJ      = main.o
+OBJ      = main.o \
+	../FreeRTOS/Source/list.o \
+	../FreeRTOS/Source/queue.o \
+	../FreeRTOS/Source/tasks.o \
+	../FreeRTOS/Source/portable/GCC/ARM_CM0/port.o
 
 CPUFLAGS = -mthumb -mabi=aapcs -T../mdk/nrf52_xxaa.ld -mcpu=cortex-m4 -mfloat-abi=hard -mfpu=fpv4-sp-d16 --specs=nano.specs -DNRF52832_XXAA -DFLOAT_ABI_HARD
 OBJ     := ../mdk/gcc_startup_nrf52.o ../mdk/system_nrf52.o $(OBJ)

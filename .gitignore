@@ -7,4 +7,5 @@
 *.lst
 *.lss
 *.map
+/FreeRTOS/
 !content.txt
