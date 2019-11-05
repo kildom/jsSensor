@@ -9,3 +9,4 @@
 *.map
 /FreeRTOS/
 !content.txt
+*.orig

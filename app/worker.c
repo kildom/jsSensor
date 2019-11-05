@@ -1,3 +1,8 @@
+
+#include <stdint.h>
+
+#include "worker.h"
+
 #define PROD_ASSERT(cond, ...) // Production assert - always enabled
 #define DBG_ASSERT(cond, ...) // Debug assert - enabled only in debug build
 #define STATIC_ASSERT(cond, ...) // Static assert - compilation time assert
@@ -6,7 +11,7 @@ typedef void (*WorkerCallback)(uintptr_t* data);
 
 #define MAX_ARGS 5
 
-typedef WorkerQueueItem_tag
+typedef struct WorkerQueueItem_tag
 {
     WorkerCallback callback;
     uintptr_t data;
@@ -114,12 +119,11 @@ typedef struct Timer_tag
     struct Timer_tag* next;
     uint32_t flags;
     TimerCallback callback;
-    uintptr_t userData;
 } Timer;
 
 static Timer* timersList = NULL;
 
-void initTimer(Timer* timer, TimerCallback callback, uintptr_t userData);
+void initTimer(Timer* timer, TimerCallback callback);
 
 
 static void startTimerFW(uintptr_t* args)
