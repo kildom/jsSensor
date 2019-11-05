@@ -10,3 +10,4 @@
 /FreeRTOS/
 !content.txt
 *.orig
+/nrfjprog/

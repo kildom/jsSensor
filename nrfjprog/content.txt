@@ -1,0 +1,4 @@
+nrfjprog from nRF Command Line Tools
+https://www.nordicsemi.com/Software-and-Tools/Development-Tools/nRF-Command-Line-Tools
+
+Needed only if there is no nrfjprog in the PATH.

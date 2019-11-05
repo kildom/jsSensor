@@ -1,6 +1,71 @@
 
+#include "nrf.h"
+
+#include "FreeRTOS.h"
+#include "task.h"
+#include "queue.h"
+
+
+static QueueHandle_t xQueue = NULL;
+
+static void taskA( void *pvParameters )
+{
+    uint8_t data;
+    volatile int i;
+    TickType_t xNextWakeTime;
+
+    while (1)
+    {
+		xQueueReceive( xQueue, &data, portMAX_DELAY );
+        NRF_GPIO->OUTCLR = (1 << 21);
+       	xNextWakeTime = xTaskGetTickCount();
+        vTaskDelayUntil( &xNextWakeTime, 2);
+        NRF_GPIO->OUTSET = (1 << 21);
+    }
+}
+
+
+static void taskB( void *pvParameters )
+{
+    uint8_t data = 0;
+    volatile int i;
+    TickType_t xNextWakeTime;
+   	xNextWakeTime = xTaskGetTickCount();
+
+    while (1)
+    {
+        xQueueSend(xQueue, &data, portMAX_DELAY);
+        vTaskDelayUntil( &xNextWakeTime, 100);
+    }
+}
+
+
+void vApplicationIdleHook( void )
+{
+}
+
 int main()
 {
+    NRF_CLOCK->LFCLKSRC = CLOCK_LFCLKSTAT_SRC_Xtal << CLOCK_LFCLKSTAT_SRC_Pos;
+    NRF_CLOCK->TASKS_LFCLKSTART = 1;
+
+    NRF_GPIO->PIN_CNF[21] = 1;
+    NRF_GPIO->PIN_CNF[22] = 1;
+    NRF_GPIO->PIN_CNF[23] = 1;
+    NRF_GPIO->PIN_CNF[24] = 1;
+
+    NRF_GPIO->OUTSET = (1 << 21);
+    NRF_GPIO->OUTCLR = (1 << 22);
+    NRF_GPIO->OUTSET = (1 << 23);
+    NRF_GPIO->OUTCLR = (1 << 24);
+    
+	xQueue = xQueueCreate(16, 1);
+
+    xTaskCreate(taskA, "A", 128, NULL, tskIDLE_PRIORITY + 2, NULL);
+    xTaskCreate(taskB, "B", 128, NULL, tskIDLE_PRIORITY + 1, NULL);
+
+    vTaskStartScheduler();
+
     return 0;
 }
 

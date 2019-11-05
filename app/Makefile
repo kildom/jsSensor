@@ -1,30 +1,53 @@
 
-# 'C:/Program Files (x86)/GNU Tools ARM Embedded/7 2018-q2-update/bin/arm-none-eabi-gcc' -O3 -g3 -mthumb -mabi=aapcs -L../../../../../../modules/nrfx/mdk -TMbedTLS_threading_test_FreeRTOS_gcc_nrf52.ld -mcpu=cortex-m4 -mfloat-abi=hard -mfpu=fpv4-sp-d16 -Wl,--gc-sections --specs=nano.specs @_build/nrf52840_xxaa.in -Wl,-Map=_build/nrf52840_xxaa.map -o _build/nrf52840_xxaa.out
+TARGET = sensor
 
-
-TARGET   = sensor
-INCLUDE  = -I../mdk -I../CMSIS/CMSIS/Core/Include \
-	-I../FreeRTOS/Source/include \
+INCLUDE = \
 	-I. \
-	-I../FreeRTOS/Source/portable/GCC/ARM_CM0
-CFLAGS   = -O0 -g3 -fdata-sections -ffunction-sections -Wl,--gc-sections -fno-strict-aliasing -fshort-enums -D__HEAP_SIZE=8192 -D__STACK_SIZE=8192
-LIBS     = -L../mdk -lc -lnosys -lm
+	-I../mdk \
+	-I../CMSIS/CMSIS/Core/Include \
+	-I../FreeRTOS/Source/include
 
-OBJ      = main.o \
+CFLAGS   = \
+	-O0 -g3 -fdata-sections -ffunction-sections -Wl,--gc-sections \
+	-fno-strict-aliasing -fshort-enums \
+	-D__HEAP_SIZE=8192 \
+	-D__STACK_SIZE=8192
+
+LIBS = \
+	-L../mdk \
+	-lc \
+	-lnosys \
+	-lm
+
+OBJ = \
+	main.o \
+	port_m0.o \
 	../FreeRTOS/Source/list.o \
 	../FreeRTOS/Source/queue.o \
 	../FreeRTOS/Source/tasks.o \
-	../FreeRTOS/Source/portable/GCC/ARM_CM0/port.o
+	../FreeRTOS/Source/portable/MemMang/heap_1.o
 
-CPUFLAGS = -mthumb -mabi=aapcs -T../mdk/nrf52_xxaa.ld -mcpu=cortex-m4 -mfloat-abi=hard -mfpu=fpv4-sp-d16 --specs=nano.specs -DNRF52832_XXAA -DFLOAT_ABI_HARD
-OBJ     := ../mdk/gcc_startup_nrf52.o ../mdk/system_nrf52.o $(OBJ)
+#--- NRF52832_XXAA
+#CPUFLAGS = -mthumb -mabi=aapcs -T../mdk/nrf52_xxaa.ld -mcpu=cortex-m4 -mfloat-abi=hard -mfpu=fpv4-sp-d16 --specs=nano.specs -DNRF52832_XXAA -DFLOAT_ABI_HARD
+#OBJ     := ../mdk/gcc_startup_nrf52.o ../mdk/system_nrf52.o $(OBJ)
+
+#--- NRF51422_XXAC
+CPUFLAGS = -mthumb -mabi=aapcs -T../mdk/nrf51_xxac.ld -mcpu=cortex-m0 -mfloat-abi=soft --specs=nano.specs -DNRF51422_XXAC -DFLOAT_ABI_SOFT
+OBJ     := ../mdk/gcc_startup_nrf51.o ../mdk/system_nrf51.o $(OBJ)
 
 GCC_VERSION := $(shell arm-none-eabi-gcc --version 2>/dev/null)
+NRFJPROG_VERSION := $(shell nrfjprog --version 2>/dev/null)
 
 ifdef GCC_VERSION
 	GCC_PATH=
 else
     GCC_PATH=../gcc/bin/
+endif
+
+ifdef NRFJPROG_VERSION
+	NRFJPROG_PATH=
+else
+    NRFJPROG_PATH=../nrfjprog/
 endif
 
 all: $(TARGET).elf
@@ -44,5 +67,5 @@ $(TARGET).elf: $(OBJ) Makefile
 	$(GCC_PATH)arm-none-eabi-objcopy -O ihex $(TARGET).elf $(TARGET).hex
 
 flash: $(TARGET).elf
-	nrfjprog --program $(TARGET).hex --chiperase
-	nrfjprog --reset
+	$(NRFJPROG_PATH)nrfjprog --program $(TARGET).hex --chiperase
+	$(NRFJPROG_PATH)nrfjprog --reset
