@@ -6,10 +6,10 @@
 #define configUSE_TICK_HOOK				0
 #define configCPU_CLOCK_HZ				16000000
 #define configTICK_RATE_HZ				100
-#define configMAX_PRIORITIES			3
+#define configMAX_PRIORITIES			5
 #define configMINIMAL_STACK_SIZE		( ( unsigned short ) 60 )
 #define configTOTAL_HEAP_SIZE			( ( size_t ) ( 6500 ) )
-#define configMAX_TASK_NAME_LEN			5
+#define configMAX_TASK_NAME_LEN			3
 #define configUSE_TRACE_FACILITY		0
 #define configUSE_16_BIT_TICKS			0
 #define configIDLE_SHOULD_YIELD			1
@@ -22,6 +22,9 @@
 #define configUSE_COUNTING_SEMAPHORES	1
 #define configGENERATE_RUN_TIME_STATS	0
 #define configUSE_TICKLESS_IDLE         1
+
+#define configSUPPORT_STATIC_ALLOCATION  1
+#define configSUPPORT_DYNAMIC_ALLOCATION 0
 
 /* Co-routine definitions. */
 #define configUSE_CO_ROUTINES 			0

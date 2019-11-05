@@ -21,11 +21,14 @@ LIBS = \
 
 OBJ = \
 	main.o \
+	worker.o \
+	timer.o \
 	port_m0.o \
 	../FreeRTOS/Source/list.o \
 	../FreeRTOS/Source/queue.o \
-	../FreeRTOS/Source/tasks.o \
-	../FreeRTOS/Source/portable/MemMang/heap_1.o
+	../FreeRTOS/Source/tasks.o
+
+	#../FreeRTOS/Source/portable/MemMang/heap_1.o
 
 #--- NRF52832_XXAA
 #CPUFLAGS = -mthumb -mabi=aapcs -T../mdk/nrf52_xxaa.ld -mcpu=cortex-m4 -mfloat-abi=hard -mfpu=fpv4-sp-d16 --specs=nano.specs -DNRF52832_XXAA -DFLOAT_ABI_HARD

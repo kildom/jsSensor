@@ -366,7 +366,7 @@ void RTC0_IRQHandler( void )
 void prvSetupTimerInterrupt( void )
 {
     NRF_RTC0->INTENSET = (RTC_INTENSET_TICK_Enabled << RTC_INTENSET_TICK_Pos);
-    NRF_RTC0->PRESCALER = 327;
+    NRF_RTC0->PRESCALER = (32768 + (configTICK_RATE_HZ / 2)) / configTICK_RATE_HZ - 1;
     rtcCounterCopy = NRF_RTC0->COUNTER;
     NVIC_EnableIRQ(RTC0_IRQn);
     NRF_RTC0->TASKS_START = 1;
@@ -401,8 +401,8 @@ void vPortSuppressTicksAndSleep( TickType_t xExpectedIdleTime )
     /* Set COMPARE0 interupt to the end of sleep mode. */
     uint32_t rtcStartCounter = rtcCounterCopy;
     idleEndCounter = (rtcStartCounter + xExpectedIdleTime) & 0x00FFFFFF;
-	NRF_RTC0->EVENTS_COMPARE[0] = 0;
     NRF_RTC0->CC[0] = idleEndCounter;
+	NRF_RTC0->EVENTS_COMPARE[0] = 0;
     NRF_RTC0->INTENSET = (RTC_INTENSET_COMPARE0_Enabled << RTC_INTENSET_COMPARE0_Pos);
 
     /* If CC value is too close to COUNTER value COMPARE interrupt may not heppen.
@@ -423,9 +423,11 @@ void vPortSuppressTicksAndSleep( TickType_t xExpectedIdleTime )
 	configPRE_SLEEP_PROCESSING( xModifiableIdleTime );
 	if( xModifiableIdleTime > 0 )
 	{
+        NRF_GPIO->OUTSET = (1 << 22);
 		__asm volatile( "dsb" ::: "memory" );
 		__asm volatile( "wfi" );
 		__asm volatile( "isb" );
+        NRF_GPIO->OUTCLR = (1 << 22);
 	}
 	configPOST_SLEEP_PROCESSING( xExpectedIdleTime );
 
@@ -460,7 +462,7 @@ void vPortSuppressTicksAndSleep( TickType_t xExpectedIdleTime )
 
     if (diff > (int32_t)xExpectedIdleTime)
     {
-        //diff = xExpectedIdleTime;
+        diff = xExpectedIdleTime;
     }
 
     if (diff > 0)

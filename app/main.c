@@ -5,6 +5,11 @@
 #include "task.h"
 #include "queue.h"
 
+#include "common.h"
+#include "worker.h"
+#include "timer.h"
+
+
 
 static QueueHandle_t xQueue = NULL;
 
@@ -19,11 +24,20 @@ static void taskA( void *pvParameters )
 		xQueueReceive( xQueue, &data, portMAX_DELAY );
         NRF_GPIO->OUTCLR = (1 << 21);
        	xNextWakeTime = xTaskGetTickCount();
-        vTaskDelayUntil( &xNextWakeTime, 2);
+        vTaskDelayUntil( &xNextWakeTime, MS2TICKS(200));
         NRF_GPIO->OUTSET = (1 << 21);
     }
 }
 
+
+void ledBlink(uintptr_t* data)
+{
+    TickType_t xNextWakeTime;
+    NRF_GPIO->OUTCLR = (1 << 24);
+   	xNextWakeTime = xTaskGetTickCount();
+    vTaskDelayUntil( &xNextWakeTime, MS2TICKS(200));
+    NRF_GPIO->OUTSET = (1 << 24);
+}
 
 static void taskB( void *pvParameters )
 {
@@ -35,13 +49,68 @@ static void taskB( void *pvParameters )
     while (1)
     {
         xQueueSend(xQueue, &data, portMAX_DELAY);
-        vTaskDelayUntil( &xNextWakeTime, 100);
+        vTaskDelayUntil( &xNextWakeTime, MS2TICKS(500));
+        workerSend(ledBlink, 0);
+        vTaskDelayUntil( &xNextWakeTime, MS2TICKS(500));
     }
 }
 
 
 void vApplicationIdleHook( void )
 {
+#if 1
+	__asm volatile( "cpsid i" ::: "memory" );
+	__asm volatile( "dsb" );
+	__asm volatile( "isb" );
+    NRF_GPIO->OUTSET = (1 << 22);
+	__asm volatile( "wfi" );
+    NRF_GPIO->OUTCLR = (1 << 22);
+	__asm volatile( "cpsie i");
+	__asm volatile( "dsb" );
+	__asm volatile( "isb" );
+#else
+    volatile int i;
+    NRF_GPIO->OUTCLR = (1 << 22);
+    for (i = 0; i < 1000; i++);
+    NRF_GPIO->OUTSET = (1 << 22);
+#endif
+}
+
+void ledBlink2(Timer* timer);
+
+struct LedTimer
+{
+    Timer timer;
+    uint8_t data;
+} ledTimer = { { ledBlink2 }, 0 };
+
+void ledBlink2(Timer* timer)
+{
+    struct LedTimer* t = (struct LedTimer*)timer;
+    if (t->data)
+    {
+        NRF_GPIO->OUTCLR = (1 << 23);
+        timerStart(timer, timer->fireTime + MS2TICKS(200), TIMER_FLAG_ABSOLUTE);
+    }
+    else
+    {
+        NRF_GPIO->OUTSET = (1 << 23);
+        timerStart(timer, timer->fireTime + MS2TICKS(800), TIMER_FLAG_ABSOLUTE);
+    }
+    t->data = !t->data;
+}
+
+
+void test1(Timer* timer)
+{
+}
+
+Timer timer2 = { test1 };
+
+void workerStartup(uintptr_t* data)
+{
+    timerStart(&ledTimer.timer, SEC2TICKS(1), 0);
+    //timerStart(&timer2, 0, MS2TICKS(10) | TIMER_FLAG_REPEAT);
 }
 
 int main()
@@ -59,14 +128,32 @@ int main()
     NRF_GPIO->OUTSET = (1 << 23);
     NRF_GPIO->OUTCLR = (1 << 24);
     
-	xQueue = xQueueCreate(16, 1);
+    static uint8_t queueBuffer[16 * 1];
+    static StaticQueue_t queueData;
+    xQueue = xQueueCreateStatic(ARRAY_LENGTH(queueBuffer), sizeof(queueBuffer[0]), queueBuffer, &queueData);
 
-    xTaskCreate(taskA, "A", 128, NULL, tskIDLE_PRIORITY + 2, NULL);
-    xTaskCreate(taskB, "B", 128, NULL, tskIDLE_PRIORITY + 1, NULL);
+    static StackType_t stackA[128];
+    static StackType_t stackB[128];
+    static StaticTask_t dataA;
+    static StaticTask_t dataB;
+
+    xTaskCreateStatic(taskA, "A", ARRAY_LENGTH(stackA), NULL, tskIDLE_PRIORITY + 3, stackA, &dataA);
+    xTaskCreateStatic(taskB, "B", ARRAY_LENGTH(stackB), NULL, tskIDLE_PRIORITY + 2, stackB, &dataB);
+
+    workerInit(workerStartup);
 
     vTaskStartScheduler();
 
     return 0;
+}
+
+void vApplicationGetIdleTaskMemory( StaticTask_t **ppxIdleTaskTCBBuffer, StackType_t **ppxIdleTaskStackBuffer, uint32_t *pulIdleTaskStackSize )
+{
+    static StaticTask_t data;
+    static StackType_t stack[128];
+    *ppxIdleTaskTCBBuffer = &data;
+    *ppxIdleTaskStackBuffer = stack;
+    *pulIdleTaskStackSize = sizeof(stack) / sizeof(stack[0]);
 }
 
 #if 0

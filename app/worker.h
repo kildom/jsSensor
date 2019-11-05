@@ -7,8 +7,9 @@
 
 typedef void (*WorkerCallback)(uintptr_t* data);
 
-void workerInit();
+void workerInit(WorkerCallback startupCallback);
 void workerSend(WorkerCallback callback, size_t args, ...);
 void workerSendFromISR(bool* yieldRequested, WorkerCallback callback, size_t args, ...);
+bool inWorkerThread();
 
 #endif // _WORKER_H_
