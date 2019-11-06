@@ -24,10 +24,11 @@ OBJ = \
 	worker.o \
 	timer.o \
 	port_m0.o \
+	tasks.o \
 	../FreeRTOS/Source/list.o \
-	../FreeRTOS/Source/queue.o \
-	../FreeRTOS/Source/tasks.o
+	../FreeRTOS/Source/queue.o
 
+	#../FreeRTOS/Source/tasks.o
 	#../FreeRTOS/Source/portable/MemMang/heap_1.o
 
 #--- NRF52832_XXAA

@@ -326,36 +326,28 @@ void xPortPendSVHandler( void )
 static volatile uint32_t rtcCounterCopy = 0;
 #endif
 
+
 void RTC0_IRQHandler( void )
 {
-    if (NRF_RTC0->EVENTS_TICK)
-    {
-        uint32_t ulPreviousMask;
+    uint32_t ulPreviousMask;
 
-    	NRF_RTC0->EVENTS_TICK = 0;
+    if (NRF_RTC0->EVENTS_TICK) NRF_RTC0->EVENTS_TICK = 0;
+    if (NRF_RTC0->EVENTS_COMPARE[0]) NRF_RTC0->EVENTS_COMPARE[0] = 0;
 
-    #   if( configUSE_TICKLESS_IDLE == 1 )
-        /* Skip this interrupt if this tick was already counted by tickless idle function. */
-        uint32_t rtcCounter = NRF_RTC0->COUNTER;
-        if (rtcCounter == rtcCounterCopy) return;
-        rtcCounterCopy = rtcCounter;
-    #   endif
+#   if( configUSE_TICKLESS_IDLE == 1 )
+    rtcCounterCopy = NRF_RTC0->COUNTER;
+#   endif
 
-    	ulPreviousMask = portSET_INTERRUPT_MASK_FROM_ISR();
-    	{
-    		/* Increment the RTOS tick. */
-    		if( xTaskIncrementTick() != pdFALSE )
-    		{
-    			/* Pend a context switch. */
-    			*(portNVIC_INT_CTRL) = portNVIC_PENDSVSET;
-    		}
-    	}
-    	portCLEAR_INTERRUPT_MASK_FROM_ISR( ulPreviousMask );
-    }
-    else if (NRF_RTC0->EVENTS_COMPARE[0])
-    {
-        NRF_RTC0->EVENTS_COMPARE[0] = 0;
-    }
+	ulPreviousMask = portSET_INTERRUPT_MASK_FROM_ISR();
+	{
+		/* Increment the RTOS tick. */
+		if( xTaskIncrementTick() != pdFALSE )
+		{
+			/* Pend a context switch. */
+			*(portNVIC_INT_CTRL) = portNVIC_PENDSVSET;
+		}
+	}
+	portCLEAR_INTERRUPT_MASK_FROM_ISR( ulPreviousMask );
 }
 /*-----------------------------------------------------------*/
 
@@ -378,9 +370,10 @@ void prvSetupTimerInterrupt( void )
 void vPortSuppressTicksAndSleep( TickType_t xExpectedIdleTime )
 {
     TickType_t xModifiableIdleTime;
-    uint32_t idleEndCounter;
-    uint32_t rtcCounter;
+    uint32_t rtcStartCounter;
     int32_t diff;
+    uint32_t counter;
+    uint32_t event;
 
 	/* Enter a critical section but don't use the taskENTER_CRITICAL()
 	method as that will mask interrupts that should exit sleep mode. */
@@ -390,7 +383,7 @@ void vPortSuppressTicksAndSleep( TickType_t xExpectedIdleTime )
 
 	/* If a context switch is pending or a task is waiting for the scheduler
 	to be unsuspended then abandon the low power entry. */
-	if( eTaskConfirmSleepModeStatus() == eAbortSleep || xExpectedIdleTime < 1)
+	if( eTaskConfirmSleepModeStatus() == eAbortSleep)
 	{
 		/* Re-enable interrupts - see comments above the cpsid instruction()
 		above. */
@@ -399,20 +392,11 @@ void vPortSuppressTicksAndSleep( TickType_t xExpectedIdleTime )
 	}
 
     /* Set COMPARE0 interupt to the end of sleep mode. */
-    uint32_t rtcStartCounter = rtcCounterCopy;
-    idleEndCounter = (rtcStartCounter + xExpectedIdleTime) & 0x00FFFFFF;
-    NRF_RTC0->CC[0] = idleEndCounter;
+    rtcStartCounter = rtcCounterCopy;
+    NRF_RTC0->CC[0] = (rtcStartCounter + xExpectedIdleTime) & 0x00FFFFFF;
 	NRF_RTC0->EVENTS_COMPARE[0] = 0;
     NRF_RTC0->INTENSET = (RTC_INTENSET_COMPARE0_Enabled << RTC_INTENSET_COMPARE0_Pos);
-
-    /* If CC value is too close to COUNTER value COMPARE interrupt may not heppen.
-    In this case TICK interrupt must be kept enabled to wake up. */
-    rtcCounter = NRF_RTC0->COUNTER;
-    diff = ((int32_t)(idleEndCounter - rtcCounter) << 8) >> 8;
-    if (diff >= 2)
-    {
-        NRF_RTC0->INTENCLR = (RTC_INTENSET_TICK_Enabled << RTC_INTENSET_TICK_Pos);
-    }
+    NRF_RTC0->INTENCLR = (RTC_INTENSET_TICK_Enabled << RTC_INTENSET_TICK_Pos);
 
 	/* Sleep until something happens.  configPRE_SLEEP_PROCESSING() can
 	set its parameter to 0 to indicate that its implementation contains
@@ -431,13 +415,31 @@ void vPortSuppressTicksAndSleep( TickType_t xExpectedIdleTime )
 	}
 	configPOST_SLEEP_PROCESSING( xExpectedIdleTime );
 
-    NRF_RTC0->EVENTS_TICK = 0;
-	NRF_RTC0->EVENTS_COMPARE[0] = 0;
+    do
+    {
+        counter = NRF_RTC0->COUNTER;
+        event = NRF_RTC0->EVENTS_COMPARE[0];
+    } while (counter != NRF_RTC0->COUNTER);
+    
+    diff = ((int32_t)(counter - rtcStartCounter) << 8) >> 8;
 
-    /* Calculate difference between current RTC COUNTER value and value set by
-    TICK interrupt. */
-    rtcCounter = NRF_RTC0->COUNTER;
-    rtcCounterCopy = rtcCounter;
+    if (diff > (int32_t)xExpectedIdleTime)
+    {
+        diff = xExpectedIdleTime;
+    }
+
+    if (event)
+    {
+        diff--;
+    }
+
+    if (diff > 0)
+    {
+        vTaskStepTick(diff);
+    }
+
+    NRF_RTC0->EVENTS_TICK = 0;
+    NRF_RTC0->INTENSET = (RTC_INTENSET_TICK_Enabled << RTC_INTENSET_TICK_Pos);
 
 	/* Re-enable interrupts to allow the interrupt that brought the MCU
 	out of sleep mode to execute immediately.  see comments above
@@ -454,23 +456,28 @@ void vPortSuppressTicksAndSleep( TickType_t xExpectedIdleTime )
 	__asm volatile( "dsb" );
 	__asm volatile( "isb" );
 
-    /* Restore default RTC interrupts. */
+    /* Disable COMPARE0 interrupt. */
     NRF_RTC0->INTENCLR = (RTC_INTENSET_COMPARE0_Enabled << RTC_INTENSET_COMPARE0_Pos);
-    NRF_RTC0->INTENSET = (RTC_INTENSET_TICK_Enabled << RTC_INTENSET_TICK_Pos);
-
-    diff = ((int32_t)(rtcCounter - rtcStartCounter) << 8) >> 8;
-
-    if (diff > (int32_t)xExpectedIdleTime)
-    {
-        diff = xExpectedIdleTime;
-    }
-
-    if (diff > 0)
-    {
-	    vTaskStepTick(diff);
-    }
 
 	/* Exit with interrpts enabled. */
 	__asm volatile( "cpsie i" ::: "memory" );
 }
+
+
+void vPortShortSleep( void )
+{
+	__asm volatile( "cpsid i" ::: "memory" );
+	__asm volatile( "dsb" );
+	__asm volatile( "isb" );
+    if (eTaskConfirmSleepModeStatus() != eAbortSleep)
+    {
+        NRF_GPIO->OUTSET = (1 << 22);
+		__asm volatile( "dsb" ::: "memory" );
+		__asm volatile( "wfi" );
+		__asm volatile( "isb" );
+        NRF_GPIO->OUTCLR = (1 << 22);
+    }
+	__asm volatile( "cpsie i" ::: "memory" );
+}
+
 #endif

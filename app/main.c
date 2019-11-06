@@ -58,22 +58,6 @@ static void taskB( void *pvParameters )
 
 void vApplicationIdleHook( void )
 {
-#if 1
-	__asm volatile( "cpsid i" ::: "memory" );
-	__asm volatile( "dsb" );
-	__asm volatile( "isb" );
-    NRF_GPIO->OUTSET = (1 << 22);
-	__asm volatile( "wfi" );
-    NRF_GPIO->OUTCLR = (1 << 22);
-	__asm volatile( "cpsie i");
-	__asm volatile( "dsb" );
-	__asm volatile( "isb" );
-#else
-    volatile int i;
-    NRF_GPIO->OUTCLR = (1 << 22);
-    for (i = 0; i < 1000; i++);
-    NRF_GPIO->OUTSET = (1 << 22);
-#endif
 }
 
 void ledBlink2(Timer* timer);
