@@ -2,17 +2,18 @@
 #include <stdint.h>
 #include <stdlib.h>
 
+#include "onewire.h"
+#include "dht22.h"
 
 void dht22_read(uint32_t pinNumber)
 {
-    onewire_read(pinNumber);
+    ow_read(pinNumber);
 }
 
-void ow_read_result(uint8_t* buffer, size_t bits)
+void ow_read_result(uint8_t* buffer)
 {
     uint8_t sum;
-    if (bits < 40
-        || buffer[0] + buffer[1] + buffer[2] + buffer[3] != buffer[4]
+    if (buffer[0] + buffer[1] + buffer[2] + buffer[3] != buffer[4]
         || buffer[0] > 100
         || buffer[1] > 9
         || (int8_t)buffer[2] > 100 || (int8_t)buffer[2] < -60

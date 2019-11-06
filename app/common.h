@@ -6,6 +6,7 @@
 #include <stdlib.h>
 #include <assert.h>
 
+#include "FreeRTOSConfig.h"
 #include "config.h"
 
 #ifndef MIN

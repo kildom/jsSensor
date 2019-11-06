@@ -23,6 +23,8 @@ OBJ = \
 	main.o \
 	worker.o \
 	timer.o \
+	onewire.o \
+	dht22.o \
 	port_m0.o \
 	tasks.o \
 	../FreeRTOS/Source/list.o \

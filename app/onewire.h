@@ -8,6 +8,6 @@
 void ow_init();
 void ow_read(uint32_t pinNumber);
 
-void ow_read_result(uint8_t* buffer, size_t bits);
+void ow_read_result(uint8_t* buffer);
 
 #endif // _ONEWIRE_H_
