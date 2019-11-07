@@ -1,5 +1,4 @@
-/gcc/
-/nrfjprog/
+/binutils/
 *.o
 *.elf
 *.hex

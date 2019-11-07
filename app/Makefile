@@ -48,13 +48,13 @@ NRFJPROG_VERSION := $(shell nrfjprog --version 2>/dev/null)
 ifdef GCC_VERSION
 	GCC_PATH=
 else
-    GCC_PATH=../gcc/bin/
+    GCC_PATH=../binutils/gcc/bin/
 endif
 
 ifdef NRFJPROG_VERSION
 	NRFJPROG_PATH=
 else
-    NRFJPROG_PATH=../nrfjprog/
+    NRFJPROG_PATH=../binutils/nrfjprog/
 endif
 
 all: $(TARGET).elf
