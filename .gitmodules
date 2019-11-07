@@ -1,0 +1,4 @@
+[submodule "FreeRTOS"]
+	path = FreeRTOS
+	url = https://github.com/kildom/FreeRTOS-Kernel.git
+	branch = nrf5x_improvements

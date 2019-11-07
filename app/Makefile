@@ -5,7 +5,8 @@ INCLUDE = \
 	-I. \
 	-I../mdk \
 	-I../CMSIS/CMSIS/Core/Include \
-	-I../FreeRTOS/Source/include
+	-I../FreeRTOS/FreeRTOS/Source/include \
+	-I../FreeRTOS/FreeRTOS/Source/portable/GCC/ARM_CM0
 
 CFLAGS   = \
 	-O0 -g3 -fdata-sections -ffunction-sections -Wl,--gc-sections \
@@ -26,13 +27,12 @@ OBJ = \
 	fast_timer.o \
 	onewire.o \
 	dht22.o \
-	port_m0.o \
-	tasks.o \
-	../FreeRTOS/Source/list.o \
-	../FreeRTOS/Source/queue.o
-
-	#../FreeRTOS/Source/tasks.o
-	#../FreeRTOS/Source/portable/MemMang/heap_1.o
+	../FreeRTOS/FreeRTOS/Source/list.o \
+	../FreeRTOS/FreeRTOS/Source/queue.o \
+	../FreeRTOS/FreeRTOS/Source/tasks.o \
+	../FreeRTOS/FreeRTOS/Source/portable/GCC/ARM_CM0/port.o
+	
+	#../FreeRTOS/FreeRTOS/Source/portable/MemMang/heap_1.o
 
 #--- NRF52832_XXAA
 #CPUFLAGS = -mthumb -mabi=aapcs -T../mdk/nrf52_xxaa.ld -mcpu=cortex-m4 -mfloat-abi=hard -mfpu=fpv4-sp-d16 --specs=nano.specs -DNRF52832_XXAA -DFLOAT_ABI_HARD

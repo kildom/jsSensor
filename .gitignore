@@ -7,7 +7,6 @@
 *.lst
 *.lss
 *.map
-/FreeRTOS/
 !content.txt
 *.orig
 /nrfjprog/
