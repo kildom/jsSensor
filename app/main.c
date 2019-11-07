@@ -9,6 +9,8 @@
 #include "worker.h"
 #include "timer.h"
 
+#include "fast_timer.h"
+
 
 
 static QueueHandle_t xQueue = NULL;
@@ -30,13 +32,17 @@ static void taskA( void *pvParameters )
 }
 
 
+void fastOff(bool* yieldRequested, FastTimer* timer)
+{
+    NRF_GPIO->OUTSET = (1 << 24);
+}
+
+FastTimer fast = { fastOff };
+
 void ledBlink(uintptr_t* data)
 {
-    TickType_t xNextWakeTime;
     NRF_GPIO->OUTCLR = (1 << 24);
-   	xNextWakeTime = xTaskGetTickCount();
-    vTaskDelayUntil( &xNextWakeTime, MS2TICKS(200));
-    NRF_GPIO->OUTSET = (1 << 24);
+    fastTimerStart(&fast, SEC2FAST(0.5), 0);
 }
 
 static void taskB( void *pvParameters )
@@ -111,6 +117,8 @@ int main()
     NRF_GPIO->OUTCLR = (1 << 22);
     NRF_GPIO->OUTSET = (1 << 23);
     NRF_GPIO->OUTCLR = (1 << 24);
+
+    fastTimerInit();
     
     static uint8_t queueBuffer[16 * 1];
     static StaticQueue_t queueData;

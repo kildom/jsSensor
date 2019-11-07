@@ -23,6 +23,7 @@ OBJ = \
 	main.o \
 	worker.o \
 	timer.o \
+	fast_timer.o \
 	onewire.o \
 	dht22.o \
 	port_m0.o \
