@@ -1,6 +1,5 @@
-/CMSIS/
 /gcc/
-/mdk/
+/nrfjprog/
 *.o
 *.elf
 *.hex
@@ -9,4 +8,4 @@
 *.map
 !content.txt
 *.orig
-/nrfjprog/
+
