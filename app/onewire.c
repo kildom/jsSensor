@@ -10,6 +10,7 @@
 #include "config.h"
 #include "common.h"
 #include "timer.h"
+#include "fast_timer.h"
 #include "worker.h"
 #include "onewire.h"
 
@@ -17,7 +18,7 @@ static uint8_t buffer[128]; // 128 bytes => 1024 bits => 10.24 ms
 static size_t samples;
 static bool running;
 static uint32_t currentPinNumber;
-static Timer timer;
+static FastTimer timer;
 
 void ow_init()
 {
@@ -41,6 +42,12 @@ void ow_init()
     OW_SPIS->PSELSCK = OW_SCK;
     OW_SPIS->PSELCSN = OW_CSN;
     OW_SPIS->CONFIG = 0;
+
+    // Setup TIMER for 100kbit SPI clock
+    OW_TIMER->BITMODE = 1;
+    OW_TIMER->PRESCALER = 4; // 1MHz => 1µs / step
+    OW_TIMER->CC[0] = 5;     // 200kHz => 5µs / half-period => 10µs / SPI bit
+    OW_TIMER->SHORTS = (TIMER_SHORTS_COMPARE0_CLEAR_Enabled << TIMER_SHORTS_COMPARE0_CLEAR_Pos);
 
     // Set current state
     running = false;
@@ -112,12 +119,9 @@ static void parseSamples()
     //ow_read_result(bitsError ? NULL : buffer);
 }
 
-static void stopSampling(Timer* t)
+static void finalizeAndParse(uintptr_t* args)
 {
     volatile uint8_t timeout = 255;
-    OW_TIMER->TASKS_STOP = 1;
-    NRF_PPI->CHENCLR = 1 << OW_PPI_CHANNEL;
-    NRF_GPIO->OUTSET = (1 << OW_CSN_LOOPBACK);
     NRF_GPIO->OUTCLR = (1 << OW_SCK_LOOPBACK);
     while (!OW_SPIS->EVENTS_END)
     {
@@ -133,21 +137,26 @@ static void stopSampling(Timer* t)
     parseSamples();
 }
 
-static void startSampling(Timer* t)
+
+static void stopSampling(bool* yieldRequested, FastTimer* t)
 {
+    OW_TIMER->TASKS_STOP = 1;
+    NRF_PPI->CHENCLR = 1 << OW_PPI_CHANNEL;
+    NRF_GPIO->OUTSET = (1 << OW_CSN_LOOPBACK);
+    workerSendFromISR(yieldRequested, finalizeAndParse, 0);
+}
 
-    // Setup TIMER for 100kbit SPI clock
-    OW_TIMER->BITMODE = 1;
-    OW_TIMER->PRESCALER = 4; // 1MHz => 1µs / step
-    OW_TIMER->CC[0] = 5;     // 200kHz => 5µs / half-period => 10µs / SPI bit
-    OW_TIMER->SHORTS = (TIMER_SHORTS_COMPARE0_CLEAR_Enabled << TIMER_SHORTS_COMPARE0_CLEAR_Pos);
 
-    taskENTER_CRITICAL();
+static void startSampling(bool* yieldRequested, FastTimer* t)
+{
+    BaseType_t saved;
+
+    saved = taskENTER_CRITICAL_FROM_ISR();
 
     OW_SPIS->ENABLE = SPIS_ENABLE_ENABLE_Enabled;
 
     OW_SPIS->TASKS_ACQUIRE = 1;
-    while (!OW_SPIS->EVENTS_ACQUIRED); // TODO: check if not too long for critical section
+    while (!OW_SPIS->EVENTS_ACQUIRED); // TODO: check if not too long for interrupt
     OW_SPIS->EVENTS_ACQUIRED = 0;
     OW_SPIS->EVENTS_END = 0;
     OW_SPIS->RXDPTR = (uint32_t)buffer;
@@ -162,12 +171,12 @@ static void startSampling(Timer* t)
     OW_TIMER->TASKS_CLEAR = 1;
     OW_TIMER->TASKS_START = 1;
 
-    taskEXIT_CRITICAL();
+    taskEXIT_CRITICAL_FROM_ISR(saved);
     
     NRF_GPIO->DIRCLR = (1 << currentPinNumber);
 
     timer.callback = stopSampling;
-    timerStart(&timer, MS2TICKS(8), 0);
+    fastTimerStart(&timer, MS2FAST(8), 0);
 }
 
 
@@ -184,6 +193,6 @@ void ow_read(uint32_t pinNumber)
     NRF_GPIO->DIRSET = (1 << currentPinNumber);
 
     timer.callback = startSampling;
-    timerStart(&timer, MS2TICKS(2), 0);
+    fastTimerStart(&timer, MS2FAST(1.2), 0);
 }
 
