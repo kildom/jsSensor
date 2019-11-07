@@ -109,7 +109,7 @@ static void parseSamples()
         buffer[i] = dataByte;
     }
     running = false;
-    ow_read_result(bitsError ? NULL : buffer);
+    //ow_read_result(bitsError ? NULL : buffer);
 }
 
 static void stopSampling(Timer* t)
@@ -124,7 +124,7 @@ static void stopSampling(Timer* t)
         if (!(timeout--))
         {
             running = false;
-            ow_read_result(NULL);
+            //ow_read_result(NULL);
             return;
         }
     }

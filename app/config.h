@@ -6,10 +6,10 @@
 #define WORKER_QUEUE_LENGTH 32
 #define WORKER_MAX_ARGS     5
 
-#define OW_SCK 22
-#define OW_CSN 23
-#define OW_SCK_LOOPBACK 20
-#define OW_CSN_LOOPBACK 24
+#define OW_SCK 16
+#define OW_CSN 14
+#define OW_SCK_LOOPBACK 15
+#define OW_CSN_LOOPBACK 13
 #define OW_TIMER NRF_TIMER2
 #define OW_TIMER_HANDLER TIMER0_IRQHandler
 #define OW_SPIS NRF_SPIS1

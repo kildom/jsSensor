@@ -8,6 +8,7 @@
 #include "common.h"
 #include "worker.h"
 #include "timer.h"
+#include "onewire.h"
 
 #include "fast_timer.h"
 
@@ -90,17 +91,36 @@ void ledBlink2(Timer* timer)
     t->data = !t->data;
 }
 
+void test2(Timer* timer);
 
-void test1(Timer* timer)
+FastTimer fast;
+Timer slow;
+
+void test4(bool* y, FastTimer* timer)
 {
+    NRF_GPIO->PIN_CNF[12] = 12; // pullup
+    slow.callback = test2;
+    timerStartFromISR(y, &slow, MS2TICKS(3000), 0);
 }
 
-Timer timer2 = { test1 };
+void test3(bool* y, FastTimer* timer)
+{
+    NRF_GPIO->PIN_CNF[12] = 4; // pulldown
+    fast.callback = test4;
+    fastTimerStart(&fast, MS2FAST(1), 0);
+}
+
+void test2(Timer* timer)
+{
+    ow_read(17);
+    fast.callback = test3;
+    fastTimerStart(&fast, MS2FAST(7), 0);
+}
 
 void workerStartup(uintptr_t* data)
 {
-    timerStart(&ledTimer.timer, SEC2TICKS(1), 0);
-    //timerStart(&timer2, 0, MS2TICKS(10) | TIMER_FLAG_REPEAT);
+    slow.callback = test2;
+    timerStart(&slow, MS2TICKS(100), 0);
 }
 
 int main()
@@ -113,12 +133,29 @@ int main()
     NRF_GPIO->PIN_CNF[23] = 1;
     NRF_GPIO->PIN_CNF[24] = 1;
 
+    NRF_GPIO->PIN_CNF[12] = 12; // pullup
+
+    NRF_GPIO->OUTSET = (1 << 21);
+    NRF_GPIO->OUTCLR = (1 << 22);
+    NRF_GPIO->OUTSET = (1 << 23);
+    NRF_GPIO->OUTSET = (1 << 24);
+
+    ow_init();
+    fastTimerInit();
+    workerInit(workerStartup);
+    vTaskStartScheduler();
+
+    /*
+    NRF_GPIO->PIN_CNF[21] = 1;
+    NRF_GPIO->PIN_CNF[22] = 1;
+    NRF_GPIO->PIN_CNF[23] = 1;
+    NRF_GPIO->PIN_CNF[24] = 1;
+
     NRF_GPIO->OUTSET = (1 << 21);
     NRF_GPIO->OUTCLR = (1 << 22);
     NRF_GPIO->OUTSET = (1 << 23);
     NRF_GPIO->OUTCLR = (1 << 24);
 
-    fastTimerInit();
     
     static uint8_t queueBuffer[16 * 1];
     static StaticQueue_t queueData;
@@ -134,7 +171,7 @@ int main()
 
     workerInit(workerStartup);
 
-    vTaskStartScheduler();
+    vTaskStartScheduler();*/
 
     return 0;
 }
