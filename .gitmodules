@@ -2,3 +2,7 @@
 	path = FreeRTOS
 	url = https://github.com/kildom/FreeRTOS-Kernel.git
 	branch = nrf5x_improvements
+[submodule "nrfx"]
+	path = nrfx
+	url = https://github.com/NordicSemiconductor/nrfx.git
+	branch = master

@@ -3,7 +3,7 @@ TARGET = sensor
 
 INCLUDE = \
 	-I. \
-	-I../mdk \
+	-I../nrfx/mdk \
 	-I../CMSIS/CMSIS/Core/Include \
 	-I../FreeRTOS/FreeRTOS/Source/include \
 	-I../FreeRTOS/FreeRTOS/Source/portable/GCC/ARM_CM0
@@ -15,7 +15,7 @@ CFLAGS   = \
 	-D__STACK_SIZE=8192
 
 LIBS = \
-	-L../mdk \
+	-L../nrfx/mdk \
 	-lc \
 	-lnosys \
 	-lm
@@ -40,7 +40,7 @@ OBJ = \
 
 #--- NRF51422_XXAC
 CPUFLAGS = -mthumb -mabi=aapcs -T../mdk/nrf51_xxac.ld -mcpu=cortex-m0 -mfloat-abi=soft --specs=nano.specs -DNRF51422_XXAC -DFLOAT_ABI_SOFT
-OBJ     := ../mdk/gcc_startup_nrf51.o ../mdk/system_nrf51.o $(OBJ)
+OBJ     := ../nrfx/mdk/gcc_startup_nrf51.o ../nrfx/mdk/system_nrf51.o $(OBJ)
 
 GCC_VERSION := $(shell arm-none-eabi-gcc --version 2>/dev/null)
 NRFJPROG_VERSION := $(shell nrfjprog --version 2>/dev/null)
