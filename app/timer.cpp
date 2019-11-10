@@ -183,36 +183,48 @@ void timerExecute(WorkerLevel level)
     timer->callback(timer);
 }
 
+static uint32_t float2ticks(float sec)
+{
+    int32_t x = (int32_t)((32768.0f / (float)_PRESCALE) * sec + 0.5f);
+    return x <= 0 ? 1 : x;
+}
+
 static void highLevelTimeoutCallback(Timer* timer)
 {
     TimerEx* t = (TimerEx*)timer;
     t->func();
-    if (!(timer->_flags & TIMER_FLAG_REPEAT))
-        t->self = NULL;
+    if (!(timer->_flags & TIMER_INT_FLAG_RUNNING))
+    {
+        Ref<TimerEx>::deleteUnmanaged(t);
+    }
 }
 
-static uint32_t float2ticks(float sec)
+static Ref<TimerEx> setHighLevelTimeout(const std::function<void()>& func, float sec, uint32_t flags)
 {
-    return 0;
-}
-
-std::shared_ptr<TimerEx> setHighLevelTimeout(const std::function<void()>& func, float sec, uint32_t flags)
-{
-    std::shared_ptr<TimerEx> shptr = std::make_shared<TimerEx>();
-    TimerEx* t = shptr.get();
+    Ref<TimerEx> ref = Ref<TimerEx>::make();
+    TimerEx* t = ref.createUnmanaged();
     t->func = func;
     t->timer.callback = highLevelTimeoutCallback;
-    t->self = shptr;
     timerStart(&t->timer, float2ticks(sec), flags);
-    return shptr;
+    return ref;
 }
 
-std::shared_ptr<TimerEx> setTimeout(const std::function<void()>& func, float sec)
+Ref<TimerEx> setTimeout(const std::function<void()>& func, float sec)
 {
     return setHighLevelTimeout(func, sec, TIMER_FLAG_HIGH);
 }
 
-std::shared_ptr<TimerEx> setInterval(const std::function<void()>& func, float intervalSec, float startSec)
+Ref<TimerEx> setInterval(const std::function<void()>& func, float intervalSec, float startSec)
 {
     return setHighLevelTimeout(func, startSec < 0.0f ? intervalSec : startSec, float2ticks(intervalSec) | TIMER_FLAG_HIGH | TIMER_FLAG_REPEAT);
+}
+
+void stopTimeout(Ref<TimerEx> timeout)
+{
+    if (timeout->timer._flags & TIMER_INT_FLAG_RUNNING)
+    {
+        removeItem(&timeout->timer);
+        timeout->timer._flags &= ~TIMER_INT_FLAG_RUNNING;
+        Ref<TimerEx>::deleteUnmanaged(timeout->ptr);
+    }
 }

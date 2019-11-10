@@ -31,36 +31,21 @@ struct TimerEx
 {
     Timer timer;
     std::function<void()> func;
-    std::shared_ptr<TimerEx> self;
 };
 
-/* How to add user data to timer:
-struct MyTimer_tag
-{
-    Timer timer;
-    uint8_t some;
-    bool data;
-} myTimer;
-void callback(struct Timer_tag* timer)
-{
-    struct MyTimer_tag *data = (struct MyTimer_tag*)timer;
-    f2(data->some);
-}
-void main()
-{
-    initTimer(&myTimer.timer, callback);
-}
-*/
- 
+typedef Ref<TimerEx> TimeoutHandle;
+
 void timerStart(Timer* timer, uint32_t time, uint32_t flags);
 void timerStop(Timer* timer);
 void timerStartFromISR(bool* yieldRequested, Timer* timer, uint32_t time, uint32_t flags);
 void timerStopFromISR(bool* yieldRequested, Timer* timer);
 
-std::shared_ptr<TimerEx> setTimeout(const std::function<void()>& func, float sec);
-std::shared_ptr<TimerEx> setInterval(const std::function<void()>& func, float intervalSec, float startSec = -1.0f);
-
 uint32_t timerGetNextTimeout(WorkerLevel level);
 void timerExecute(WorkerLevel level);
+
+TimeoutHandle setTimeout(const std::function<void()>& func, float sec);
+TimeoutHandle setInterval(const std::function<void()>& func, float intervalSec, float startSec = -1.0f);
+void stopTimeout(TimeoutHandle timeout);
+static inline void stopInterval(const TimeoutHandle& interval) { stopTimeout(interval); }
 
 #endif // _TIMER_H_

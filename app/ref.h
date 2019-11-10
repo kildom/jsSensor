@@ -49,6 +49,10 @@ public:
     friend bool operator!=(std::nullptr_t, const Ref<T>& other) { return nullptr != other.ptr; }
 
     operator bool() { return ptr != nullptr; }
+
+    T* createUnmanaged() { inc(ptr); return ptr; }
+    static Ref restoreFromUnmanaged(T* source) { inc(source); return Ref(source); }
+    static void deleteUnmanaged(T* source) { dec(source); }
     
     template <typename ...Params>
     static Ref make(Params&&... params)
@@ -62,7 +66,7 @@ public:
         CntAndData* ptr = new CntAndData(std::forward<Params>(params)...);
         return Ref(&ptr->data);
     }
-    
+
 };
 
 

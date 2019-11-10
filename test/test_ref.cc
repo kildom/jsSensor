@@ -46,6 +46,7 @@ struct TestCls
 
 std::set<TestCls*> TestCls::instances;
 
+
 TEST(Ref, CreateDelete) {
     {
         testing::InSequence seq;
@@ -136,6 +137,7 @@ TEST(Ref, MoveConstr) {
     EXPECT_CALL(testClsMocks, end());
 }
 
+
 TEST(Ref, Compare) {
     EXPECT_CALL(testClsMocks, constructor())
         .Times(2);
@@ -159,4 +161,29 @@ TEST(Ref, Compare) {
     EXPECT_TRUE(nullptr != a);
     EXPECT_TRUE(nullptr == c);
     EXPECT_FALSE(nullptr != c);
+}
+
+
+TEST(Ref, Unmanaged) {
+    testing::InSequence seq;
+    TestEnd end;
+    EXPECT_CALL(testClsMocks, constructor());
+    Ref<TestCls> a = Ref<TestCls>::make();
+    TestCls* pa = a.createUnmanaged();
+    EXPECT_EQ(((uint32_t*)pa)[-1], 2);
+    a = nullptr;
+    EXPECT_EQ(((uint32_t*)pa)[-1], 1);
+    a = Ref<TestCls>::restoreFromUnmanaged(pa);
+    EXPECT_EQ(((uint32_t*)pa)[-1], 2);
+    Ref<TestCls>::deleteUnmanaged(pa);
+    EXPECT_EQ(((uint32_t*)pa)[-1], 1);
+    EXPECT_CALL(testClsMocks, destructor(testing::_));
+    a = nullptr;
+    EXPECT_CALL(testClsMocks, constructor());
+    a = Ref<TestCls>::make();
+    pa = a.createUnmanaged();
+    a = nullptr;
+    EXPECT_CALL(testClsMocks, destructor(testing::_));
+    Ref<TestCls>::deleteUnmanaged(pa);
+    EXPECT_CALL(testClsMocks, end());
 }
