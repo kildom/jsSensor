@@ -24,3 +24,5 @@ void ow_read_result(uint8_t* buffer)
     }
     dht22_read_result((uint16_t)buffer[0] * 10 + (uint16_t)buffer[1], (int16_t)buffer[2] * 10 + (int16_t)buffer[3]);
 }
+
+void dht22_read_result(uint16_t rh, uint16_t temp){}

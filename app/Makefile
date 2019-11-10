@@ -8,29 +8,42 @@ INCLUDE = \
 	-I../FreeRTOS/FreeRTOS/Source/include \
 	-I../FreeRTOS/FreeRTOS/Source/portable/GCC/ARM_CM0
 
-CFLAGS   = \
+# C and C++ flags
+CPPFLAGS   = \
 	-O0 -g3 -fdata-sections -ffunction-sections -Wl,--gc-sections \
 	-fno-strict-aliasing -fshort-enums \
 	-D__HEAP_SIZE=8192 \
 	-D__STACK_SIZE=8192
+
+# C flags
+CFLAGS   = 
+
+# C++ flags
+CXXFLAGS   = 
+
+# Assembler flags
+ASMFLAGS =
 
 LIBS = \
 	-L../nrfx/mdk \
 	-lc \
 	-lnosys \
 	-lm
+OBJ = worker.o timer.o
 
-OBJ = \
+#OBJ = \
 	main.o \
 	worker.o \
 	timer.o \
-	fast_timer.o \
-	onewire.o \
-	dht22.o \
 	../FreeRTOS/FreeRTOS/Source/list.o \
 	../FreeRTOS/FreeRTOS/Source/queue.o \
 	../FreeRTOS/FreeRTOS/Source/tasks.o \
 	../FreeRTOS/FreeRTOS/Source/portable/GCC/ARM_CM0/port.o
+
+	# \
+	fast_timer.o \
+	onewire.o \
+	dht22.o \
 	
 	#../FreeRTOS/FreeRTOS/Source/portable/MemMang/heap_1.o
 
@@ -60,16 +73,19 @@ endif
 all: $(TARGET).elf
 
 clean:
-	rm -f $(OBJ) $(TARGET).elf $(TARGET).lst $(TARGET).hex
+	rm -f $(OBJ) $(TARGET).elf $(TARGET).lst $(TARGET).map $(TARGET).hex
+
+.cpp.o: Makefile
+	$(GCC_PATH)arm-none-eabi-c++ -c $(CPUFLAGS) $(CPPFLAGS) $(CXXFLAGS) $(INCLUDE) -o $@ $<
 
 .c.o: Makefile
-	$(GCC_PATH)arm-none-eabi-gcc -c $(CPUFLAGS) $(CFLAGS) $(INCLUDE) -o $@ $<
+	$(GCC_PATH)arm-none-eabi-gcc -c $(CPUFLAGS) $(CPPFLAGS) $(CFLAGS) $(INCLUDE) -o $@ $<
 
 .S.o: Makefile
-	$(GCC_PATH)arm-none-eabi-gcc -c $(CPUFLAGS) $(CFLAGS) $(INCLUDE) -o $@ $<
+	$(GCC_PATH)arm-none-eabi-gcc -c $(CPUFLAGS) $(CPPFLAGS) $(ASMFLAGS) $(INCLUDE) -o $@ $<
 
 $(TARGET).elf: $(OBJ) Makefile
-	$(GCC_PATH)arm-none-eabi-gcc $(CPUFLAGS) $(CFLAGS) $(LIBS) -Wl,-Map=$(TARGET).map -o $(TARGET).elf $(OBJ)
+	$(GCC_PATH)arm-none-eabi-c++ $(CPUFLAGS) $(CPPFLAGS) $(CXXFLAGS) $(LIBS) -Wl,-Map=$(TARGET).map -o $(TARGET).elf $(OBJ)
 	$(GCC_PATH)arm-none-eabi-objdump -d $(TARGET).elf > $(TARGET).lst
 	$(GCC_PATH)arm-none-eabi-objcopy -O ihex $(TARGET).elf $(TARGET).hex
 

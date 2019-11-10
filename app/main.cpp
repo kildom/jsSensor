@@ -8,9 +8,11 @@
 #include "common.h"
 #include "worker.h"
 #include "timer.h"
+extern "C" {
 #include "onewire.h"
 
 #include "fast_timer.h"
+}
 
 
 
@@ -93,7 +95,6 @@ void ledBlink2(Timer* timer)
 
 void test2(Timer* timer);
 
-FastTimer fast;
 Timer slow;
 
 void test4(bool* y, FastTimer* timer)
@@ -119,8 +120,8 @@ void test2(Timer* timer)
 
 void workerStartup(uintptr_t* data)
 {
-    slow.callback = test2;
-    timerStart(&slow, MS2TICKS(100), 0);
+    //slow.callback = test2;
+    //timerStart(&slow, MS2TICKS(100), 0);
 }
 
 int main()
@@ -140,8 +141,8 @@ int main()
     NRF_GPIO->OUTSET = (1 << 23);
     NRF_GPIO->OUTSET = (1 << 24);
 
-    ow_init();
-    fastTimerInit();
+    //ow_init();
+    //fastTimerInit();
     workerInit(workerStartup);
     vTaskStartScheduler();
 
