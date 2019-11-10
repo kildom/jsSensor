@@ -10,3 +10,6 @@
 	path = CMSIS
 	url = https://github.com/ARM-software/CMSIS_5.git
 	branch = master
+[submodule "test/gtest"]
+	path = test/gtest
+	url = https://github.com/google/googletest.git
