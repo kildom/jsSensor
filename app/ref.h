@@ -18,6 +18,7 @@ private:
         uint32_t c = --((uint32_t*)ptr)[-1];
         if (c == 0)
         {
+            // TODO: don't delete ptr - it should be both counter and data (as created in make)
             delete ptr;
         }
     }
@@ -59,7 +60,14 @@ public:
     {
         struct CntAndData
         {
+            // use uintptr_t for counter
             uint32_t counter;
+            // TODO: If 'data' is aligned to >32bit empty space is here and it have to be initialized instead of counter.
+            //       The initialization must be before initialization of data.
+            // Solution: Allocate buffer sizeof(uint32_t) + sizeof(T)
+            //           Initialize counter = 1
+            //           Call constructor on data using 'placement new': https://stackoverflow.com/questions/519808/call-a-constructor-on-a-already-allocated-memory
+            //           In dec() method call destructor directly and free buffer.
             T data;
             CntAndData(Params&&... params) : counter(1), data(std::forward<Params>(params)...) { }
         };
