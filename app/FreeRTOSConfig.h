@@ -4,7 +4,7 @@
 #define configUSE_PREEMPTION			1
 #define configUSE_IDLE_HOOK				1
 #define configUSE_TICK_HOOK				0
-#define configCPU_CLOCK_HZ				16000000
+#define configCPU_CLOCK_HZ				64000000
 #define configTICK_RATE_HZ				250
 #define configMAX_PRIORITIES			5
 #define configMINIMAL_STACK_SIZE		( ( unsigned short ) 60 )
@@ -21,7 +21,11 @@
 #define configUSE_APPLICATION_TASK_TAG	0
 #define configUSE_COUNTING_SEMAPHORES	1
 #define configGENERATE_RUN_TIME_STATS	0
-#define configUSE_TICKLESS_IDLE         1
+#define configUSE_TICKLESS_IDLE         0
+
+#define configKERNEL_INTERRUPT_PRIORITY 255
+#define configMAX_SYSCALL_INTERRUPT_PRIORITY 191
+#define configMAX_API_CALL_INTERRUPT_PRIORITY 191
 
 #define configSUPPORT_STATIC_ALLOCATION  1
 #define configSUPPORT_DYNAMIC_ALLOCATION 0
@@ -54,7 +58,7 @@ header file. */
 standard names - or at least those used in the unmodified vector table. */
 #define vPortSVCHandler SVC_Handler
 #define xPortPendSVHandler PendSV_Handler
-#define xPortSysTickHandler SysTick_Handler2
+#define xPortSysTickHandler SysTick_Handler
 
 #endif /* FREERTOS_CONFIG_H */
 

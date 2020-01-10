@@ -145,7 +145,7 @@ void fastTimerInit()
     timerIsRunning = false;
 }
 
-
+extern "C"
 void FAST_TIMER_IRQ()
 {
     BaseType_t saved;

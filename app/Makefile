@@ -6,7 +6,6 @@ INCLUDE = \
 	-I../nrfx/mdk \
 	-I../CMSIS/CMSIS/Core/Include \
 	-I../FreeRTOS/FreeRTOS/Source/include \
-	-I../FreeRTOS/FreeRTOS/Source/portable/GCC/ARM_CM0
 
 # C and C++ flags
 CPPFLAGS   = \
@@ -29,7 +28,14 @@ LIBS = \
 	-lc \
 	-lnosys \
 	-lm
-OBJ = worker.o timer.o
+
+OBJ = test1.o \
+	worker.o \
+	timer.o \
+	fast_timer.o \
+	../FreeRTOS/FreeRTOS/Source/list.o \
+	../FreeRTOS/FreeRTOS/Source/queue.o \
+	../FreeRTOS/FreeRTOS/Source/tasks.o \
 
 #OBJ = \
 	main.o \
@@ -38,7 +44,6 @@ OBJ = worker.o timer.o
 	../FreeRTOS/FreeRTOS/Source/list.o \
 	../FreeRTOS/FreeRTOS/Source/queue.o \
 	../FreeRTOS/FreeRTOS/Source/tasks.o \
-	../FreeRTOS/FreeRTOS/Source/portable/GCC/ARM_CM0/port.o
 
 	# \
 	fast_timer.o \
@@ -49,11 +54,22 @@ OBJ = worker.o timer.o
 
 #--- NRF52832_XXAA
 #CPUFLAGS = -mthumb -mabi=aapcs -T../mdk/nrf52_xxaa.ld -mcpu=cortex-m4 -mfloat-abi=hard -mfpu=fpv4-sp-d16 --specs=nano.specs -DNRF52832_XXAA -DFLOAT_ABI_HARD
-#OBJ     := ../mdk/gcc_startup_nrf52.o ../mdk/system_nrf52.o $(OBJ)
+#OBJ     := ../nrfx/mdk/gcc_startup_nrf52.o ../nrfx/mdk/system_nrf52.o $(OBJ)
+#OBJ     += ../FreeRTOS/FreeRTOS/Source/portable/GCC/ARM_CM4F/port.o
+#INCLUDE += -I../FreeRTOS/FreeRTOS/Source/portable/GCC/ARM_CM4F
+
+#--- nRF52840_XXAA
+CPUFLAGS = -mthumb -mabi=aapcs -Tnrf52840_xxaa.ld -mcpu=cortex-m4 -mfloat-abi=hard -mfpu=fpv4-sp-d16 --specs=nano.specs -DNRF52840_XXAA -DFLOAT_ABI_HARD
+OBJ     := ../nrfx/mdk/gcc_startup_nrf52840.o ../nrfx/mdk/system_nrf52840.o $(OBJ)
+OBJ     += ../FreeRTOS/FreeRTOS/Source/portable/GCC/ARM_CM4F/port.o
+INCLUDE += -I../FreeRTOS/FreeRTOS/Source/portable/GCC/ARM_CM4F
+
 
 #--- NRF51422_XXAC
-CPUFLAGS = -mthumb -mabi=aapcs -T../mdk/nrf51_xxac.ld -mcpu=cortex-m0 -mfloat-abi=soft --specs=nano.specs -DNRF51422_XXAC -DFLOAT_ABI_SOFT
-OBJ     := ../nrfx/mdk/gcc_startup_nrf51.o ../nrfx/mdk/system_nrf51.o $(OBJ)
+#CPUFLAGS = -mthumb -mabi=aapcs -T../mdk/nrf51_xxac.ld -mcpu=cortex-m0 -mfloat-abi=soft --specs=nano.specs -DNRF51422_XXAC -DFLOAT_ABI_SOFT
+#OBJ     := ../nrfx/mdk/gcc_startup_nrf51.o ../nrfx/mdk/system_nrf51.o $(OBJ)
+#OBJ     += ../FreeRTOS/FreeRTOS/Source/portable/GCC/ARM_CM0/port.o
+#INCLUDE += -I../FreeRTOS/FreeRTOS/Source/portable/GCC/ARM_CM0
 
 GCC_VERSION := $(shell arm-none-eabi-gcc --version 2>/dev/null)
 NRFJPROG_VERSION := $(shell nrfjprog --version 2>/dev/null)

@@ -153,7 +153,7 @@ void timerStopFromISR(bool* yieldRequested, Timer* timer)
 
 uint32_t timerGetNextTimeout(WorkerLevel level)
 {
-    if (timersList == NULL)
+    if (timersList[level] == NULL)
     {
         return portMAX_DELAY;
     }
@@ -180,8 +180,9 @@ void timerExecute(WorkerLevel level)
     }
     timer->callback(timer);
 }
-
 } // namespace low
+
+#if 0
 
 using namespace low;
 
@@ -233,3 +234,5 @@ void stopTimeout(TimeoutHandle timeout)
         TimeoutHandle::deleteUnmanaged(timeout.ptr);
     }
 }
+
+#endif

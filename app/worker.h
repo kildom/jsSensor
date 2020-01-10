@@ -26,5 +26,18 @@ void workerHighFromISR(bool* yieldRequested, WorkerCallback callback, size_t arg
 bool workerInThread(WorkerLevel level);
 
 }; // namespace low
+TODO: reconsider naming and API to be more flexible for more workers, e.g.:
+    levels:
+        - WORKER_SLOW
+        - WORKER_FAST
+        - WORKER_FASTEST (new if needed)
+    API:
+        workerAdd(callback, args, ...) - add to the same level
+        workerAddFromISR(yieldRequested, callback, args, ...) - add to the fastest
+        workerAddTo(level, callback, args, ...) - add to specific level
+        workerAddToFromISR(yieldRequested, level, callback, args, ...) - add to specific level
+    C++:
+        workerAdd(func) - add to slow
+*/
 
 #endif // _WORKER_H_
