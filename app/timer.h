@@ -5,15 +5,15 @@
 #include <stdbool.h>
 #include <stdlib.h>
 
-#include <memory>
-
-#include "ref.h"
 #include "worker.h"
 
-#define TIMER_FLAG_ABSOLUTE 0x01000000 /**< `time` parameter is an absolute time */
-#define TIMER_FLAG_REPEAT 0x02000000   /**< Timer will repeat if this flag is set. This flag have to be ORed with interval period. `time` parameter is delay before first callback execution. */
-#define TIMER_FLAG_HIGH 0x04000000     /**< Timer will be executed in high worker */
-#define TIMER_FLAG_INTERVAL_MASK 0x00FFFFFF
+namespace low
+{
+
+static const uint32_t TIMER_FLAG_ABSOLUTE = 0x01000000; /**< `time` parameter is an absolute time */
+static const uint32_t TIMER_FLAG_REPEAT = 0x02000000;   /**< Timer will repeat if this flag is set. This flag have to be ORed with interval period. `time` parameter is delay before first callback execution. */
+static const uint32_t TIMER_FLAG_HIGH = 0x04000000;     /**< Timer will be executed in high worker */
+static const uint32_t TIMER_FLAG_INTERVAL_MASK = 0x00FFFFFF;
 
 struct Timer;
 
@@ -27,14 +27,6 @@ struct Timer
     uint32_t _flags;
 };
 
-struct TimerEx
-{
-    Timer timer;
-    std::function<void()> func;
-};
-
-typedef Ref<TimerEx> TimeoutHandle;
-
 void timerStart(Timer* timer, uint32_t time, uint32_t flags);
 void timerStop(Timer* timer);
 void timerStartFromISR(bool* yieldRequested, Timer* timer, uint32_t time, uint32_t flags);
@@ -43,9 +35,6 @@ void timerStopFromISR(bool* yieldRequested, Timer* timer);
 uint32_t timerGetNextTimeout(WorkerLevel level);
 void timerExecute(WorkerLevel level);
 
-TimeoutHandle setTimeout(const std::function<void()>& func, float sec);
-TimeoutHandle setInterval(const std::function<void()>& func, float intervalSec, float startSec = -1.0f);
-void stopTimeout(TimeoutHandle timeout);
-static inline void stopInterval(const TimeoutHandle& interval) { stopTimeout(interval); }
+}
 
 #endif // _TIMER_H_

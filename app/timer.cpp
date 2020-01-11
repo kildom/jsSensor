@@ -5,19 +5,17 @@
 #include "common.h"
 #include "worker.h"
 #include "timer.h"
+#include "timer.hpp"
 
-#define TIMER_INT_FLAG_RUNNING 0x08000000
+namespace low {
+
+static const uint32_t TIMER_INT_FLAG_RUNNING = 0x08000000;
 
 static Timer* timersList[2] = { NULL, NULL };
 
 static Timer** getListPtr(Timer* timer)
 {
     return (timer->_flags & TIMER_FLAG_HIGH) ? &timersList[1] : &timersList[0];
-}
-
-static Timer* getList(Timer* timer)
-{
-    return (timer->_flags & TIMER_FLAG_HIGH) ? timersList[1] : timersList[0];
 }
 
 static WorkerLevel getLevel(Timer* timer)
@@ -183,6 +181,10 @@ void timerExecute(WorkerLevel level)
     timer->callback(timer);
 }
 
+} // namespace low
+
+using namespace low;
+
 static uint32_t float2ticks(float sec)
 {
     int32_t x = (int32_t)((32768.0f / (float)_PRESCALE) * sec + 0.5f);
@@ -191,40 +193,43 @@ static uint32_t float2ticks(float sec)
 
 static void highLevelTimeoutCallback(Timer* timer)
 {
-    TimerEx* t = (TimerEx*)timer;
+    DBG_ASSERT(workerInThread(WORKER_HIGH), "Must be called from high level worker.");
+    TimerHigh* t = (TimerHigh*)timer;
     t->func();
     if (!(timer->_flags & TIMER_INT_FLAG_RUNNING))
     {
-        Ref<TimerEx>::deleteUnmanaged(t);
+        TimeoutHandle::deleteUnmanaged(t);
     }
 }
 
-static Ref<TimerEx> setHighLevelTimeout(const std::function<void()>& func, float sec, uint32_t flags)
+static TimeoutHandle setHighLevelTimeout(const std::function<void()>& func, float sec, uint32_t flags)
 {
-    Ref<TimerEx> ref = Ref<TimerEx>::make();
-    TimerEx* t = ref.createUnmanaged();
+    DBG_ASSERT(workerInThread(WORKER_HIGH), "Must be called from high level worker.");
+    TimeoutHandle ref = TimeoutHandle::make();
+    TimerHigh* t = ref.createUnmanaged();
     t->func = func;
     t->timer.callback = highLevelTimeoutCallback;
     timerStart(&t->timer, float2ticks(sec), flags);
     return ref;
 }
 
-Ref<TimerEx> setTimeout(const std::function<void()>& func, float sec)
+TimeoutHandle setTimeout(const std::function<void()>& func, float sec)
 {
     return setHighLevelTimeout(func, sec, TIMER_FLAG_HIGH);
 }
 
-Ref<TimerEx> setInterval(const std::function<void()>& func, float intervalSec, float startSec)
+TimeoutHandle setInterval(const std::function<void()>& func, float intervalSec, float startSec)
 {
     return setHighLevelTimeout(func, startSec < 0.0f ? intervalSec : startSec, float2ticks(intervalSec) | TIMER_FLAG_HIGH | TIMER_FLAG_REPEAT);
 }
 
-void stopTimeout(Ref<TimerEx> timeout)
+void stopTimeout(TimeoutHandle timeout)
 {
+    DBG_ASSERT(workerInThread(WORKER_HIGH), "Must be called from high level worker.");
     if (timeout->timer._flags & TIMER_INT_FLAG_RUNNING)
     {
         removeItem(&timeout->timer);
         timeout->timer._flags &= ~TIMER_INT_FLAG_RUNNING;
-        Ref<TimerEx>::deleteUnmanaged(timeout->ptr);
+        TimeoutHandle::deleteUnmanaged(timeout.ptr);
     }
 }

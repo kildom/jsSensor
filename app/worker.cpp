@@ -14,15 +14,15 @@
 #include "timer.h"
 #include "worker.h"
 
+namespace low {
 
-#define ITEM_TYPE_ARG 0
-#define ITEM_TYPE_CALLBACK 1
-#define ITEM_TYPE_FUNC 2
-
+static const uint8_t ITEM_TYPE_ARG = 0;
+static const uint8_t ITEM_TYPE_CALLBACK = 1;
+static const uint8_t ITEM_TYPE_FUNC = 2;
 
 struct ThreadData
 {
-    WorkerLevel worker;
+    WorkerLevel level;
     WorkerCallback startup;
 };
 
@@ -93,12 +93,6 @@ void workerHigh(WorkerCallback callback, size_t args, ...)
 }
 
 
-void workerHighEx(const std::function<void()>& func)
-{
-    sendData(workerQueue[WORKER_HIGH], (uintptr_t)(void*)new std::function<void()>(func), ITEM_TYPE_FUNC);
-}
-
-
 static void sendDataFromISR(bool* yieldRequested, QueueHandle_t queue, uintptr_t data, uint8_t type)
 {
     BaseType_t woken = pdFALSE;
@@ -138,7 +132,6 @@ void workerHighFromISR(bool* yieldRequested, WorkerCallback callback, size_t arg
 }
 
 
-
 static void workerMainLoop(void *param)
 {
     static uintptr_t argsBuffer[WORKER_MAX_ARGS];
@@ -147,17 +140,17 @@ static void workerMainLoop(void *param)
     BaseType_t ret;
     uint32_t timeout;
     WorkerCallback callback;
-    WorkerLevel worker = ((ThreadData*)param)->worker;
+    WorkerLevel level = ((ThreadData*)param)->level;
 
     callback = ((ThreadData*)param)->startup;
     callback(argsBuffer);
 
     do {
-        timeout = timerGetNextTimeout(worker);
+        timeout = timerGetNextTimeout(level);
         ret = pdFALSE;
         if (timeout != 0)
         {
-            ret = xQueueReceive(workerQueue[worker], &item, timeout);
+            ret = xQueueReceive(workerQueue[level], &item, timeout);
         }
         if (ret)
         {
@@ -181,7 +174,7 @@ static void workerMainLoop(void *param)
         }
         else
         {
-            timerExecute(worker);
+            timerExecute(level);
         }
     } while (true);
 }
@@ -211,3 +204,11 @@ bool workerInThread(WorkerLevel level)
     return xTaskGetCurrentTaskHandle() == workerTask[level];
 }
 
+}; // namespace low
+
+using namespace low;
+
+void workerHighEx(const std::function<void()>& func)
+{
+    sendData(workerQueue[WORKER_HIGH], (uintptr_t)(void*)new std::function<void()>(func), ITEM_TYPE_FUNC);
+}

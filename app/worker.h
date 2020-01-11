@@ -9,6 +9,8 @@
 
 #include "common.h"
 
+namespace low {
+
 enum WorkerLevel {
     WORKER_LOW = 0,
     WORKER_HIGH = 1,
@@ -21,7 +23,8 @@ void workerLow(WorkerCallback callback, size_t args, ...);
 void workerHigh(WorkerCallback callback, size_t args, ...);
 void workerLowFromISR(bool* yieldRequested, WorkerCallback callback, size_t args, ...);
 void workerHighFromISR(bool* yieldRequested, WorkerCallback callback, size_t args, ...);
-void workerHighEx(const std::function<void()>& func);
 bool workerInThread(WorkerLevel level);
+
+}; // namespace low
 
 #endif // _WORKER_H_
