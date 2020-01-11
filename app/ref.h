@@ -10,16 +10,17 @@ private:
 
     static void inc(T* ptr) {
         if (!ptr) return;
-        ((uint32_t*)ptr)[-1]++;
+        ((uintptr_t*)ptr)[-1]++;
     }
 
     static void dec(T* ptr) {
         if (!ptr) return;
-        uint32_t c = --((uint32_t*)ptr)[-1];
+        uintptr_t* buffer = &((uintptr_t*)ptr)[-1];
+        uintptr_t c = --(*buffer);
         if (c == 0)
         {
-            // TODO: don't delete ptr - it should be both counter and data (as created in make)
-            delete ptr;
+            ptr->~T();
+            delete[] buffer;
         }
     }
 
@@ -58,21 +59,10 @@ public:
     template <typename ...Params>
     static Ref make(Params&&... params)
     {
-        struct CntAndData
-        {
-            // use uintptr_t for counter
-            uint32_t counter;
-            // TODO: If 'data' is aligned to >32bit empty space is here and it have to be initialized instead of counter.
-            //       The initialization must be before initialization of data.
-            // Solution: Allocate buffer sizeof(uint32_t) + sizeof(T)
-            //           Initialize counter = 1
-            //           Call constructor on data using 'placement new': https://stackoverflow.com/questions/519808/call-a-constructor-on-a-already-allocated-memory
-            //           In dec() method call destructor directly and free buffer.
-            T data;
-            CntAndData(Params&&... params) : counter(1), data(std::forward<Params>(params)...) { }
-        };
-        CntAndData* ptr = new CntAndData(std::forward<Params>(params)...);
-        return Ref(&ptr->data);
+        uintptr_t* buffer = new uintptr_t[sizeof(uintptr_t) + sizeof(T)];
+        buffer[0] = 1;
+        T* ptr = new(&buffer[1]) T(std::forward<Params>(params)...);
+        return Ref(ptr);
     }
 
 };
