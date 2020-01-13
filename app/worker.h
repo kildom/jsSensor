@@ -1,43 +1,34 @@
 #ifndef _WORKER_H_
 #define _WORKER_H_
 
-#include <stdint.h>
-#include <stdbool.h>
-#include <stdlib.h>
-
-#include <functional>
+#include <utility>
 
 #include "common.h"
 
 namespace low {
 
 enum WorkerLevel {
-    WORKER_LOW = 0,
-    WORKER_HIGH = 1,
+    WORKER_LEVEL_LOW = 0,
+    WORKER_LEVEL_HIGH = 1,
+    WORKER_LEVEL_UNKNOWN = 2,
+    WORKER_LEVELS_COUNT = 2,
 };
 
 typedef void (*WorkerCallback)(uintptr_t* data);
 
-void workerInit(WorkerCallback lowStartup, WorkerCallback highStartup);
-void workerLow(WorkerCallback callback, size_t args, ...);
-void workerHigh(WorkerCallback callback, size_t args, ...);
-void workerLowFromISR(bool* yieldRequested, WorkerCallback callback, size_t args, ...);
-void workerHighFromISR(bool* yieldRequested, WorkerCallback callback, size_t args, ...);
-bool workerInThread(WorkerLevel level);
+void workerInit(WorkerCallback startups[WORKER_LEVELS_COUNT]);
+void workerAdd(WorkerCallback callback, size_t args, ...);
+void workerAddTo(WorkerLevel level, WorkerCallback callback, size_t args, ...);
+void workerAddToFromISR(bool* yieldRequested, WorkerLevel level, WorkerCallback callback, size_t args, ...);
+bool workerOnLevel(WorkerLevel level);
+WorkerLevel workerGetLevel();
 
-}; // namespace low
-TODO: reconsider naming and API to be more flexible for more workers, e.g.:
-    levels:
-        - WORKER_SLOW
-        - WORKER_FAST
-        - WORKER_FASTEST (new if needed)
-    API:
-        workerAdd(callback, args, ...) - add to the same level
-        workerAddFromISR(yieldRequested, callback, args, ...) - add to the fastest
-        workerAddTo(level, callback, args, ...) - add to specific level
-        workerAddToFromISR(yieldRequested, level, callback, args, ...) - add to specific level
-    C++:
-        workerAdd(func) - add to slow
-*/
+template<class... A>
+static inline void workerAddFromISR(bool* yieldRequested, A&&... arg)
+{
+    workerAddToFromISR(yieldRequested, WORKER_LEVEL_LOW, std::forward<A>(arg)...);
+}
+
+};
 
 #endif // _WORKER_H_

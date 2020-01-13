@@ -20,7 +20,7 @@ static Timer** getListPtr(Timer* timer)
 
 static WorkerLevel getLevel(Timer* timer)
 {
-    return (timer->_flags & TIMER_FLAG_HIGH) ? WORKER_HIGH : WORKER_LOW;
+    return (timer->_flags & TIMER_FLAG_HIGH) ? WORKER_LEVEL_HIGH : WORKER_LEVEL_LOW;
 }
 
 static void addItem(Timer* timer)
@@ -74,25 +74,20 @@ void timerStart(Timer* timer, uint32_t time, uint32_t flags)
 {
     WorkerLevel level = getLevel(timer);
     time = calcAbsoluteTime(time, flags);
-    if (!workerInThread(level))
+    if (workerOnLevel(level))
     {
-        if (level == WORKER_LOW)
+        if (timer->_flags & TIMER_INT_FLAG_RUNNING)
         {
-            workerLow(timerStartFW, 3, (uintptr_t)timer, time, flags | TIMER_FLAG_ABSOLUTE);
+            removeItem(timer);
         }
-        else
-        {
-            workerHigh(timerStartFW, 3, (uintptr_t)timer, time, flags | TIMER_FLAG_ABSOLUTE);
-        }
-        return;
+        timer->_flags = flags | TIMER_INT_FLAG_RUNNING;
+        timer->fireTime = time;
+        addItem(timer);
     }
-    if (timer->_flags & TIMER_INT_FLAG_RUNNING)
+    else
     {
-        removeItem(timer);
+        workerAddTo(level, timerStartFW, 3, (uintptr_t)timer, time, flags | TIMER_FLAG_ABSOLUTE);
     }
-    timer->_flags = flags | TIMER_INT_FLAG_RUNNING;
-    timer->fireTime = time;
-    addItem(timer);
 }
 
 
@@ -105,20 +100,15 @@ static void timerStopFW(uintptr_t* args)
 void timerStop(Timer* timer)
 {
     WorkerLevel level = getLevel(timer);
-    if (!workerInThread(level))
+    if (workerOnLevel(level))
     {
-        if (level == WORKER_LOW)
-        {
-            workerLow(timerStopFW, 1, (uintptr_t)timer);
-        }
-        else
-        {
-            workerHigh(timerStopFW, 1, (uintptr_t)timer);
-        }
-        return;
+        removeItem(timer);
+        timer->_flags &= ~TIMER_INT_FLAG_RUNNING;
     }
-    removeItem(timer);
-    timer->_flags &= ~TIMER_INT_FLAG_RUNNING;
+    else
+    {
+        workerAddTo(level, timerStopFW, 1, (uintptr_t)timer);
+    }
 }
 
 
@@ -126,28 +116,14 @@ void timerStartFromISR(bool* yieldRequested, Timer* timer, uint32_t time, uint32
 {
     WorkerLevel level = getLevel(timer);
     time = calcAbsoluteTime(time, flags);
-    if (level == WORKER_LOW)
-    {
-        workerLowFromISR(yieldRequested, timerStartFW, 3, (uintptr_t)timer, time, flags | TIMER_FLAG_ABSOLUTE);
-    }
-    else
-    {
-        workerHighFromISR(yieldRequested, timerStartFW, 3, (uintptr_t)timer, time, flags | TIMER_FLAG_ABSOLUTE);
-    }
+    workerAddToFromISR(yieldRequested, level, timerStartFW, 3, (uintptr_t)timer, time, flags | TIMER_FLAG_ABSOLUTE);
 }
 
 
 void timerStopFromISR(bool* yieldRequested, Timer* timer)
 {
     WorkerLevel level = getLevel(timer);
-    if (level == WORKER_LOW)
-    {
-        workerLowFromISR(yieldRequested, timerStartFW, 1, (uintptr_t)timer);
-    }
-    else
-    {
-        workerHighFromISR(yieldRequested, timerStartFW, 1, (uintptr_t)timer);
-    }
+    workerAddToFromISR(yieldRequested, level, timerStartFW, 1, (uintptr_t)timer);
 }
 
 
@@ -171,7 +147,7 @@ void timerExecute(WorkerLevel level)
     timersList[level] = timer->_next;
     if (timer->_flags & TIMER_FLAG_REPEAT)
     {
-        timer->fireTime += timer->_flags & TIMER_FLAG_INTERVAL_MASK;
+        timer->fireTime += timer->_flags & TIMER_FLAG_INTERVAL_MAX;
         addItem(timer);
     }
     else
@@ -180,11 +156,17 @@ void timerExecute(WorkerLevel level)
     }
     timer->callback(timer);
 }
+
 } // namespace low
 
-#if 0
 
 using namespace low;
+
+struct _TimerHighInternal
+{
+    low::Timer timer;
+    std::function<void()> func;
+};
 
 static uint32_t float2ticks(float sec)
 {
@@ -195,7 +177,7 @@ static uint32_t float2ticks(float sec)
 static void highLevelTimeoutCallback(Timer* timer)
 {
     DBG_ASSERT(workerInThread(WORKER_HIGH), "Must be called from high level worker.");
-    TimerHigh* t = (TimerHigh*)timer;
+    _TimerHighInternal* t = (_TimerHighInternal*)timer;
     t->func();
     if (!(timer->_flags & TIMER_INT_FLAG_RUNNING))
     {
@@ -207,7 +189,7 @@ static TimeoutHandle setHighLevelTimeout(const std::function<void()>& func, floa
 {
     DBG_ASSERT(workerInThread(WORKER_HIGH), "Must be called from high level worker.");
     TimeoutHandle ref = TimeoutHandle::make();
-    TimerHigh* t = ref.createUnmanaged();
+    _TimerHighInternal* t = ref.createUnmanaged();
     t->func = func;
     t->timer.callback = highLevelTimeoutCallback;
     timerStart(&t->timer, float2ticks(sec), flags);
@@ -226,7 +208,7 @@ TimeoutHandle setInterval(const std::function<void()>& func, float intervalSec, 
 
 void stopTimeout(TimeoutHandle timeout)
 {
-    DBG_ASSERT(workerInThread(WORKER_HIGH), "Must be called from high level worker.");
+    DBG_ASSERT(workerInThread(WORKER_LEVEL_HIGH), "Must be called from high level worker.");
     if (timeout->timer._flags & TIMER_INT_FLAG_RUNNING)
     {
         removeItem(&timeout->timer);
@@ -235,4 +217,3 @@ void stopTimeout(TimeoutHandle timeout)
     }
 }
 
-#endif

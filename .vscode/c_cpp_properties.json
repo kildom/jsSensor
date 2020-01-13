@@ -1,0 +1,23 @@
+{
+    "configurations": [
+        {
+            "name": "Linux",
+            "includePath": [
+                "${workspaceFolder}/app/*",
+                "${workspaceFolder}/FreeRTOS/FreeRTOS/Source/portable/GCC/ARM_CM0/*",
+                "${workspaceFolder}/FreeRTOS/FreeRTOS/Source/include/*",
+                "${workspaceFolder}/nrfx/mdk/*",
+                "${workspaceFolder}/CMSIS/CMSIS/Core/Include/*"
+            ],
+            "defines": [
+                "NRF51422_XXAC",
+                "FLOAT_ABI_SOFT"
+            ],
+            "compilerPath": "/dk/_old/gcc/bin/arm-none-eabi-gcc",
+            "cStandard": "c11",
+            "cppStandard": "c++17",
+            "intelliSenseMode": "gcc-x86"
+        }
+    ],
+    "version": 4
+}

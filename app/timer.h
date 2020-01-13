@@ -10,10 +10,10 @@
 namespace low
 {
 
-static const uint32_t TIMER_FLAG_ABSOLUTE = 0x01000000; /**< `time` parameter is an absolute time */
-static const uint32_t TIMER_FLAG_REPEAT = 0x02000000;   /**< Timer will repeat if this flag is set. This flag have to be ORed with interval period. `time` parameter is delay before first callback execution. */
-static const uint32_t TIMER_FLAG_HIGH = 0x04000000;     /**< Timer will be executed in high worker */
-static const uint32_t TIMER_FLAG_INTERVAL_MASK = 0x00FFFFFF;
+static const uint32_t TIMER_FLAG_ABSOLUTE = 0x01000000;     /**< `time` parameter is an absolute time. */
+static const uint32_t TIMER_FLAG_REPEAT = 0x02000000;       /**< Timer will repeat if this flag is set. This flag have to be ORed with interval period. `time` parameter is delay before first callback execution. */
+static const uint32_t TIMER_FLAG_HIGH = 0x04000000;         /**< Timer will be executed in high level worker. */
+static const uint32_t TIMER_FLAG_INTERVAL_MAX = 0x00FFFFFF; /**< Maximum interval time value that can be ORed with flags. This is also mask that can be used to get interval from flags. */
 
 struct Timer;
 

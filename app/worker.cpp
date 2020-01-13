@@ -18,7 +18,7 @@ namespace low {
 
 static const uint8_t ITEM_TYPE_ARG = 0;
 static const uint8_t ITEM_TYPE_CALLBACK = 1;
-static const uint8_t ITEM_TYPE_FUNC = 2;
+static const uint8_t ITEM_TYPE_STD_FUNCTION = 2;
 
 struct ThreadData
 {
@@ -47,7 +47,7 @@ static WorkerQueueItemBuffer workerHighStaticQueueBuffer[WORKER_HIGH_QUEUE_LENGT
 static QueueHandle_t workerQueue[2];
 static TaskHandle_t workerTask[2];
 
-static ThreadData workerThreadData[2] = { { WORKER_LOW }, { WORKER_HIGH } };
+static ThreadData workerThreadData[2] = { { WORKER_LEVEL_LOW }, { WORKER_LEVEL_HIGH } };
 
 
 STATIC_ASSERT(offsetof(WorkerQueueItem, _reserved) == 5, "Unexpected location of members in WorkerQueueItem");
@@ -66,32 +66,32 @@ static void sendData(QueueHandle_t queue, uintptr_t data, uint8_t type)
     PROD_ASSERT(ret == pdTRUE, "Work queue overflow");
 }
 
-
-void workerLow(WorkerCallback callback, size_t args, ...)
+static void workerAddToValist(WorkerLevel level, WorkerCallback callback, size_t args, va_list valist)
 {
-    va_list valist;
     DBG_ASSERT(args <= WORKER_MAX_ARGS)
-    va_start(valist, args);
     while (args--)
     {
-        sendData(workerQueue[WORKER_LOW], va_arg(valist, uintptr_t), ITEM_TYPE_ARG);
+        sendData(workerQueue[level], va_arg(valist, uintptr_t), ITEM_TYPE_ARG);
     }
-    sendData(workerQueue[WORKER_LOW], (uintptr_t)(void*)callback, ITEM_TYPE_CALLBACK);
+    sendData(workerQueue[level], (uintptr_t)(void*)callback, ITEM_TYPE_CALLBACK);
 }
 
+void workerAdd(WorkerCallback callback, size_t args, ...)
+{
+    // TODOLATER: reconsider if this function is needed. How often it is used? Removing it will simplify the code.
+    va_list valist;
+    WorkerLevel level = workerGetLevel();
+    va_start(valist, args);
+    DBG_ASSERT(level != WORKER_LEVEL_UNKNOWN, "workerAdd called not from a worker context!");
+    workerAddToValist(level, callback, args, valist);
+}
 
-void workerHigh(WorkerCallback callback, size_t args, ...)
+void workerAddTo(WorkerLevel level, WorkerCallback callback, size_t args, ...)
 {
     va_list valist;
-    DBG_ASSERT(args <= WORKER_MAX_ARGS)
     va_start(valist, args);
-    while (args--)
-    {
-        sendData(workerQueue[WORKER_HIGH], va_arg(valist, uintptr_t), ITEM_TYPE_ARG);
-    }
-    sendData(workerQueue[WORKER_HIGH], (uintptr_t)(void*)callback, ITEM_TYPE_CALLBACK);
+    workerAddToValist(level, callback, args, valist);
 }
-
 
 static void sendDataFromISR(bool* yieldRequested, QueueHandle_t queue, uintptr_t data, uint8_t type)
 {
@@ -105,30 +105,16 @@ static void sendDataFromISR(bool* yieldRequested, QueueHandle_t queue, uintptr_t
     if (woken) *yieldRequested = true;
 }
 
-
-void workerLowFromISR(bool* yieldRequested, WorkerCallback callback, size_t args, ...)
+void workerAddToFromISR(bool* yieldRequested, WorkerLevel level, WorkerCallback callback, size_t args, ...)
 {
     va_list valist;
-    DBG_ASSERT(args <= WORKER_MAX_ARGS)
     va_start(valist, args);
+    DBG_ASSERT(args <= WORKER_MAX_ARGS)
     while (args--)
     {
-        sendDataFromISR(yieldRequested, workerQueue[WORKER_LOW], va_arg(valist, uintptr_t), ITEM_TYPE_ARG);
+        sendDataFromISR(yieldRequested, workerQueue[level], va_arg(valist, uintptr_t), ITEM_TYPE_ARG);
     }
-    sendDataFromISR(yieldRequested, workerQueue[WORKER_LOW], (uintptr_t)(void*)callback, ITEM_TYPE_CALLBACK);
-}
-
-
-void workerHighFromISR(bool* yieldRequested, WorkerCallback callback, size_t args, ...)
-{
-    va_list valist;
-    DBG_ASSERT(args <= WORKER_MAX_ARGS)
-    va_start(valist, args);
-    while (args--)
-    {
-        sendDataFromISR(yieldRequested, workerQueue[WORKER_HIGH], va_arg(valist, uintptr_t), ITEM_TYPE_ARG);
-    }
-    sendDataFromISR(yieldRequested, workerQueue[WORKER_HIGH], (uintptr_t)(void*)callback, ITEM_TYPE_CALLBACK);
+    sendDataFromISR(yieldRequested, workerQueue[level], (uintptr_t)(void*)callback, ITEM_TYPE_CALLBACK);
 }
 
 
@@ -143,7 +129,7 @@ static void workerMainLoop(void *param)
     WorkerLevel level = ((ThreadData*)param)->level;
 
     callback = ((ThreadData*)param)->startup;
-    callback(argsBuffer);
+    if (callback) callback(argsBuffer);
 
     do {
         timeout = timerGetNextTimeout(level);
@@ -180,35 +166,52 @@ static void workerMainLoop(void *param)
 }
 
 
-void workerInit(WorkerCallback lowStartup, WorkerCallback highStartup)
+void workerInit(WorkerCallback startups[WORKER_LEVELS_COUNT])
 {
-    workerThreadData[0].startup = lowStartup;
-    workerThreadData[1].startup = highStartup;
-    workerQueue[WORKER_LOW] = xQueueCreateStatic(ARRAY_LENGTH(workerLowStaticQueueBuffer),
+    workerThreadData[0].startup = startups[WORKER_LEVEL_LOW];
+    workerThreadData[1].startup = startups[WORKER_LEVEL_HIGH];
+    workerQueue[WORKER_LEVEL_LOW] = xQueueCreateStatic(ARRAY_LENGTH(workerLowStaticQueueBuffer),
         sizeof(workerLowStaticQueueBuffer[0]),
-        (uint8_t*)workerLowStaticQueueBuffer, &workerStaticQueue[WORKER_LOW]);
-    workerQueue[WORKER_HIGH] = xQueueCreateStatic(ARRAY_LENGTH(workerHighStaticQueueBuffer),
+        (uint8_t*)workerLowStaticQueueBuffer, &workerStaticQueue[WORKER_LEVEL_LOW]);
+    workerQueue[WORKER_LEVEL_HIGH] = xQueueCreateStatic(ARRAY_LENGTH(workerHighStaticQueueBuffer),
         sizeof(workerHighStaticQueueBuffer[0]),
-        (uint8_t*)workerHighStaticQueueBuffer, &workerStaticQueue[WORKER_HIGH]);
-    workerTask[WORKER_LOW] = xTaskCreateStatic(workerMainLoop, "Lo", ARRAY_LENGTH(workerLowStaticStack),
-        (void*)&workerThreadData[WORKER_LOW],
-        WORKER_LOW_PRIORITY, workerLowStaticStack, &workerStaticTask[WORKER_LOW]);
-    workerTask[WORKER_HIGH] = xTaskCreateStatic(workerMainLoop, "Hi", ARRAY_LENGTH(workerHighStaticStack),
-        (void*)&workerThreadData[WORKER_HIGH],
-        WORKER_HIGH_PRIORITY, workerHighStaticStack, &workerStaticTask[WORKER_HIGH]);
+        (uint8_t*)workerHighStaticQueueBuffer, &workerStaticQueue[WORKER_LEVEL_HIGH]);
+    workerTask[WORKER_LEVEL_LOW] = xTaskCreateStatic(workerMainLoop, "Lo", ARRAY_LENGTH(workerLowStaticStack),
+        (void*)&workerThreadData[WORKER_LEVEL_LOW],
+        WORKER_LOW_PRIORITY, workerLowStaticStack, &workerStaticTask[WORKER_LEVEL_LOW]);
+    workerTask[WORKER_LEVEL_HIGH] = xTaskCreateStatic(workerMainLoop, "Hi", ARRAY_LENGTH(workerHighStaticStack),
+        (void*)&workerThreadData[WORKER_LEVEL_HIGH],
+        WORKER_HIGH_PRIORITY, workerHighStaticStack, &workerStaticTask[WORKER_LEVEL_HIGH]);
 }
 
 
-bool workerInThread(WorkerLevel level)
+bool workerOnLevel(WorkerLevel level)
 {
     return xTaskGetCurrentTaskHandle() == workerTask[level];
+}
+
+WorkerLevel workerGetLevel()
+{
+    auto handle = xTaskGetCurrentTaskHandle();
+    if (handle == workerTask[WORKER_LEVEL_LOW])
+    {
+        return WORKER_LEVEL_LOW;
+    }
+    else if (handle == workerTask[WORKER_LEVEL_HIGH])
+    {
+        return WORKER_LEVEL_HIGH;
+    }
+    else
+    {
+        return WORKER_LEVEL_UNKNOWN;
+    }
 }
 
 }; // namespace low
 
 using namespace low;
 
-void workerHighEx(const std::function<void()>& func)
+void workerAdd(const std::function<void()>& func)
 {
-    sendData(workerQueue[WORKER_HIGH], (uintptr_t)(void*)new std::function<void()>(func), ITEM_TYPE_FUNC);
+    sendData(workerQueue[WORKER_LEVEL_HIGH], (uintptr_t)(void*)new std::function<void()>(func), ITEM_TYPE_STD_FUNCTION);
 }
