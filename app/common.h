@@ -29,5 +29,16 @@
 
 #define PROD_STATIC // Static only in production build. Debug build will not be static to simplify debugging.
 
+// TODO: Check if correct task with DBG_ASSERT
+// TODO: Add at the beginning of each function
+// TODO: Use VECTACTIVE from ICSR from SCB to detect if we are in interrupt
+#define TASK_HIGH
+#define TASK_LOW
+#define TASK_IRQ
+#define TASK_LOW_OR_HIGH
+#define TASK_HIGH_OR_LOW
+#define TASK_IRQ_OR_LOW
+#define TASK_LOW_OR_IRQ
+#define TASK_ANY
 
 #endif // _COMMON_H_

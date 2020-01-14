@@ -24,4 +24,6 @@
 #define FAST_TIMER_IRQn TIMER0_IRQn
 #define FAST_TIMER_PRESCALER 6 // Fast timer frequency = 16 MHz / 2 ^ FAST_TIMER_PRESCALER
 
+#define DHT22_MEASURE_QUEUE_SIZE 4
+
 #endif // _CONFIG_H_
