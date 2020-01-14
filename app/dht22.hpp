@@ -5,6 +5,13 @@
 #include <stdbool.h>
 #include <stdlib.h>
 
+class Dht22
+{
+public:
+    Dht22(uint32_t pinNumber);
+    Promise measure();
+}
+
 void dht22_read(uint32_t pinNumber);
 
 void dht22_read_result(uint16_t rh, uint16_t temp);
