@@ -30,6 +30,7 @@ LIBS = \
 	-lm
 
 OBJ = ../app/test1.o \
+	../app/dht22.o \
 	../app/worker.o \
 	../app/timer.o \
 	../app/fast_timer.o \

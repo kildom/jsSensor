@@ -41,4 +41,7 @@
 #define TASK_LOW_OR_IRQ
 #define TASK_ANY
 
+#define LOG(...)
+#define LOG_WARNING(...)
+
 #endif // _COMMON_H_

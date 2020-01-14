@@ -10,10 +10,10 @@
 #define WORKER_MAX_ARGS          3
 #define WORKER_ARGS_BUFFER_SIZE  16
 
-#define OW_SCK 16
+#define OW_SCK 13
 #define OW_CSN 14
-#define OW_SCK_LOOPBACK 15
-#define OW_CSN_LOOPBACK 13
+#define OW_SCK_LOOPBACK 18
+#define OW_CSN_LOOPBACK 19
 #define OW_TIMER NRF_TIMER2
 #define OW_SPIS NRF_SPIS1
 #define OW_PPI_CHANNEL 0

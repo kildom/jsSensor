@@ -44,13 +44,13 @@ static inline void addToHigh(A&&... arg)
 }
 
 template<class... A>
-static inline void addToLowToFromISR(bool* yield, A&&... arg)
+static inline void addToLowFromISR(bool* yield, A&&... arg)
 {
     addToFromISR(yield, LEVEL_LOW, std::forward<A>(arg)...);
 }
 
 template<class... A>
-static inline void addToHighToFromISR(bool* yield, A&&... arg)
+static inline void addToHighFromISR(bool* yield, A&&... arg)
 {
     addToFromISR(yield, LEVEL_HIGH, std::forward<A>(arg)...);
 }

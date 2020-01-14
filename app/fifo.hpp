@@ -6,7 +6,7 @@ template<class T, size_t size>
 class Fifo
 {
 public:
-    Fifo() : start(0), length(0) { }
+    Fifo() : start(0), len(0) { }
     void push(const T& x)
     {
         DBG_ASSERT(len < size, "FIFO overflow");

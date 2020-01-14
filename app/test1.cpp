@@ -10,6 +10,8 @@
 #include "timer.h"
 #include "fast_timer.h"
 
+#include "dht22.hpp"
+
 #ifndef NRF_P0
 #define NRF_P0 NRF_GPIO
 #endif
@@ -34,10 +36,16 @@ void start1(uintptr_t* data)
 {
 }
 
+Dht22 sens(1);
+
 void start2(uintptr_t* data)
 {
     t1.startInterval(SEC2TICKS(1));
     led(0, 1);
+    sens.measure([]()
+    {
+        led(2, 1);
+    });
 }
 
 int main()
