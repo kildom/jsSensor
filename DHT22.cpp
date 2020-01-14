@@ -44,7 +44,7 @@ static void startNow(int pinNumber, const std::function<void(float h, float t, c
 {
     currentCallback = callback;
     running = true;
-    workerSend([](uintptr_t* args)
+    send([](uintptr_t* args)
     {
         dht22Read(args[0]);
     }, 1, pinNumber);
@@ -111,7 +111,7 @@ void measure(int pinNumber, const std::function<void(float h, float t, const cha
     }
     currentCallback = callback;
     running = true;
-    workerSend([](uintptr_t* args)
+    send([](uintptr_t* args)
     {
         dht22Read(args[0]);
     }, 1, pinNumber);
@@ -121,7 +121,7 @@ void measure(int pinNumber, const std::function<void(float h, float t, const cha
 extern "C"
 void dht22ReadResult(uint16_t rh, uint16_t temp, const char* errorString)
 {
-    workerSend([](uintptr_t* arg)
+    send([](uintptr_t* arg)
     {
         currentCallback((float)arg[0] / 10.0f, (float)(int16_t)arg[1] / 10.0f, (const char*)arg[2]);
     }, 3, rh, temp, errorString);

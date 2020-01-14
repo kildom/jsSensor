@@ -7,27 +7,55 @@
 
 namespace low {
 
-enum WorkerLevel {
-    WORKER_LEVEL_LOW = 0,
-    WORKER_LEVEL_HIGH = 1,
-    WORKER_LEVEL_UNKNOWN = 2,
-    WORKER_LEVELS_COUNT = 2,
+namespace worker {
+
+enum Level {
+    LEVEL_LOW = 0,
+    LEVEL_HIGH = 1,
+    LEVEL_UNKNOWN = 2,
+    LEVELS_COUNT = 2,
 };
 
-typedef void (*WorkerCallback)(uintptr_t* data);
+typedef void (*Callback)(uintptr_t* data);
 
-void workerInit(WorkerCallback startups[WORKER_LEVELS_COUNT]);
-void workerAdd(WorkerCallback callback, size_t args, ...);
-void workerAddTo(WorkerLevel level, WorkerCallback callback, size_t args, ...);
-void workerAddToFromISR(bool* yieldRequested, WorkerLevel level, WorkerCallback callback, size_t args, ...);
-bool workerOnLevel(WorkerLevel level);
-WorkerLevel workerGetLevel();
+void init(Callback startups[LEVELS_COUNT]);
+void add(Callback callback, size_t args, ...);
+void addTo(Level level, Callback callback, size_t args, ...);
+void addToFromISR(bool* yield, Level level, Callback callback, size_t args, ...);
+bool onLevel(Level level);
+Level getLevel();
 
 template<class... A>
-static inline void workerAddFromISR(bool* yieldRequested, A&&... arg)
+static inline void addFromISR(bool* yield, A&&... arg)
 {
-    workerAddToFromISR(yieldRequested, WORKER_LEVEL_LOW, std::forward<A>(arg)...);
+    addToFromISR(yield, LEVEL_LOW, std::forward<A>(arg)...);
 }
+
+template<class... A>
+static inline void addToLow(A&&... arg)
+{
+    addTo(LEVEL_LOW, std::forward<A>(arg)...);
+}
+
+template<class... A>
+static inline void addToHigh(A&&... arg)
+{
+    addTo(LEVEL_HIGH, std::forward<A>(arg)...);
+}
+
+template<class... A>
+static inline void addToLowToFromISR(bool* yield, A&&... arg)
+{
+    addToFromISR(yield, LEVEL_LOW, std::forward<A>(arg)...);
+}
+
+template<class... A>
+static inline void addToHighToFromISR(bool* yield, A&&... arg)
+{
+    addToFromISR(yield, LEVEL_HIGH, std::forward<A>(arg)...);
+}
+
+};
 
 };
 

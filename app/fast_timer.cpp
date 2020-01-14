@@ -149,7 +149,7 @@ extern "C"
 void FAST_TIMER_IRQ()
 {
     BaseType_t saved;
-    bool yieldRequested = false;
+    bool yield = false;
     int32_t diff;
     uint32_t current;
     uint32_t nextTimeout;
@@ -177,10 +177,10 @@ void FAST_TIMER_IRQ()
             timer->_flags &= ~FAST_TIMER_INT_FLAG_RUNNING;
         }
         taskEXIT_CRITICAL_FROM_ISR(saved);
-        timer->callback(&yieldRequested, timer);
+        timer->callback(&yield, timer);
         saved = taskENTER_CRITICAL_FROM_ISR();
     }
     updateTimeout();
     taskEXIT_CRITICAL_FROM_ISR(saved);
-    portYIELD_FROM_ISR(yieldRequested);
+    portYIELD_FROM_ISR(yield);
 }

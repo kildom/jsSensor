@@ -5,6 +5,6 @@
 
 #include "common.h"
 
-void workerAdd(const std::function<void()>& func);
+void setAsync(const std::function<void()>& func);
 
 #endif // _WORKER_HPP_

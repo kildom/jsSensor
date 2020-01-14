@@ -29,7 +29,7 @@ LIBS = \
 	-lnosys \
 	-lm
 
-OBJ = test1.o \
+OBJ = ../app/test1.o \
 	../app/worker.o \
 	../app/timer.o \
 	../app/fast_timer.o \

@@ -35,7 +35,7 @@ static void taskA( void *pvParameters )
 }
 
 
-void fastOff(bool* yieldRequested, FastTimer* timer)
+void fastOff(bool* yield, FastTimer* timer)
 {
     NRF_GPIO->OUTSET = (1 << 24);
 }
@@ -59,7 +59,7 @@ static void taskB( void *pvParameters )
     {
         xQueueSend(xQueue, &data, portMAX_DELAY);
         vTaskDelayUntil( &xNextWakeTime, MS2TICKS(500));
-        workerSend(ledBlink, 0);
+        send(ledBlink, 0);
         vTaskDelayUntil( &xNextWakeTime, MS2TICKS(500));
     }
 }
@@ -118,7 +118,7 @@ void test2(Timer* timer)
     fastTimerStart(&fast, MS2FAST(7), 0);
 }
 
-void workerStartup(uintptr_t* data)
+void startup(uintptr_t* data)
 {
     //slow.callback = test2;
     //timerStart(&slow, MS2TICKS(100), 0);
@@ -143,7 +143,7 @@ int main()
 
     //ow_init();
     //fastTimerInit();
-    workerInit(workerStartup);
+    init(startup);
     vTaskStartScheduler();
 
     /*
@@ -170,7 +170,7 @@ int main()
     xTaskCreateStatic(taskA, "A", ARRAY_LENGTH(stackA), NULL, tskIDLE_PRIORITY + 3, stackA, &dataA);
     xTaskCreateStatic(taskB, "B", ARRAY_LENGTH(stackB), NULL, tskIDLE_PRIORITY + 2, stackB, &dataB);
 
-    workerInit(workerStartup);
+    init(startup);
 
     vTaskStartScheduler();*/
 

@@ -16,7 +16,7 @@
 
 struct FastTimer_tag;
 
-typedef void (*FastTimerCallback)(bool* yieldRequested, struct FastTimer_tag* timer);
+typedef void (*FastTimerCallback)(bool* yield, struct FastTimer_tag* timer);
 
 typedef struct FastTimer_tag
 {

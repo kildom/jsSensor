@@ -138,16 +138,16 @@ static void finalizeAndParse(uintptr_t* args)
 }
 
 
-static void stopSampling(bool* yieldRequested, FastTimer* t)
+static void stopSampling(bool* yield, FastTimer* t)
 {
     OW_TIMER->TASKS_STOP = 1;
     NRF_PPI->CHENCLR = 1 << OW_PPI_CHANNEL;
     NRF_GPIO->OUTSET = (1 << OW_CSN_LOOPBACK);
-    workerSendFromISR(yieldRequested, finalizeAndParse, 0);
+    sendFromISR(yield, finalizeAndParse, 0);
 }
 
 
-static void startSampling(bool* yieldRequested, FastTimer* t)
+static void startSampling(bool* yield, FastTimer* t)
 {
     BaseType_t saved;
 
