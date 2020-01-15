@@ -16,8 +16,10 @@ public:
     T& pop()
     {
         DBG_ASSERT(len > 0, "FIFO empty");
+        size_t current = start;
         len--;
-        return array[start--];
+        start = (start + 1) % size;
+        return array[current];
     }
     T& peek()
     {

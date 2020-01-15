@@ -1,3 +1,4 @@
+#include <string.h>
 
 #include "nrf.h"
 
@@ -8,6 +9,7 @@
 #include "common.h"
 #include "worker.h"
 #include "timer.h"
+#include "timer.hpp"
 #include "fast_timer.h"
 
 #include "dht22.hpp"
@@ -36,16 +38,99 @@ void start1(uintptr_t* data)
 {
 }
 
+
+volatile float hu = 0.0;
+volatile float te = 0.0;
+
 Dht22 sens(1);
+
+struct Win
+{
+    float buffer[16];
+    bool rem[16];
+    float v;
+    float sum;
+    bool next;
+    void add(float x)
+    {
+        v = x;
+        memmove(&buffer[0], &buffer[1], 15 * sizeof(float));
+        buffer[15] = x;
+        sum = 0;
+        for (int i = 0; i < 16; i++)
+        {
+            if (!next) buffer[i] = x;
+            sum += buffer[i];
+            rem[i] = false;
+        }
+        next = true;
+        remMax();
+        remMax();
+        remMax();
+        remMax();
+        remMin();
+        remMin();
+        remMin();
+        remMin();
+        v = sum / 8.0f;
+    }
+    void remMax()
+    {
+        float max = -1000000;
+        int maxI = 0;
+        for (int i = 0; i < 16; i++)
+        {
+            if (!rem[i] && buffer[i] > max)
+            {
+                max = buffer[i];
+                maxI = i;
+            }
+        }
+        sum -= buffer[maxI];
+        rem[maxI] = true;
+    }
+    void remMin()
+    {
+        float max = 1000000;
+        int maxI = 0;
+        for (int i = 0; i < 16; i++)
+        {
+            if (!rem[i] && buffer[i] < max)
+            {
+                max = buffer[i];
+                maxI = i;
+            }
+        }
+        sum -= buffer[maxI];
+        rem[maxI] = true;
+    }
+    float get() { return v; }
+};
+
+Win hw;
+Win tw;
+
+
+void testSens()
+{
+    sens.measure([]()
+    {
+        static int l = 0;
+        l ^= 1;
+        led(3, l);
+        hw.add(sens.getHumidity());
+        tw.add(sens.getTemperature());
+        hu = sens.getTemperature();
+        te = tw.get();
+        setTimeout(testSens, 1);
+    });
+}
 
 void start2(uintptr_t* data)
 {
-    t1.startInterval(SEC2TICKS(1));
-    led(0, 1);
-    sens.measure([]()
-    {
-        led(2, 1);
-    });
+    //t1.startInterval(SEC2TICKS(1));
+    //led(0, 1);
+    testSens();
 }
 
 int main()

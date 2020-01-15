@@ -19,21 +19,29 @@ using namespace low;
 
 namespace _internal_Dht22 {
 
+static const size_t BUFFER_SIZE = 128; // 128 bytes => 1024 bits => 10.24 ms
+
+static const uint8_t BITS_LO = 0x00;
+static const uint8_t BITS_HI = 0x80;
+
 struct QueueItem
 {
     Dht22* dht22;
     const std::function<void()>* callback;
 };
 
-
 static bool initialized = false;
-static bool running = false;
 static Fifo<QueueItem, DHT22_MEASURE_QUEUE_SIZE> fifo;
 
-static uint8_t buffer[128]; // 128 bytes => 1024 bits => 10.24 ms
+static uint8_t* buffer = NULL;
 static size_t samples;
 static uint32_t currentPinNumber;
 static FastTimer fastTimer;
+
+static int nextByte;
+static uint8_t shiftingByte;
+static uint8_t bits;
+static bool bitsError;
 
 static void init()
 {
@@ -63,18 +71,7 @@ static void init()
     OW_TIMER->PRESCALER = 4; // 1MHz => 1µs / step
     OW_TIMER->CC[0] = 5;     // 200kHz => 5µs / half-period => 10µs / SPI bit
     OW_TIMER->SHORTS = (TIMER_SHORTS_COMPARE0_CLEAR_Enabled << TIMER_SHORTS_COMPARE0_CLEAR_Pos);
-
-    // Set current state
-    running = false;
 }
-
-static int nextByte;
-static uint8_t shiftingByte;
-static uint8_t bits;
-static bool bitsError;
-
-#define BITS_LO 0x00
-#define BITS_HI 0x80
 
 static int getBits(uint8_t bit, int min, int max)
 {
@@ -129,21 +126,28 @@ static void parseSamples()
         {
             getBits(BITS_LO, 2, 8);
             int len = getBits(BITS_HI, 1, 10);
-            if (len >= 5) dataByte |= 1;
             dataByte <<= 1;
+            if (len >= 5) dataByte |= 1;
         }
         buffer[i] = dataByte;
     }
-    if (bitsError)
+    uint8_t checksum = buffer[0] + buffer[1] + buffer[2] + buffer[3];
+    if (bitsError || checksum != buffer[4])
     {
-        LOG_WARNING("DHT22 transmission error on bits level!");
+        if (bitsError)
+        {
+            LOG_WARNING("DHT22 transmission error on bits level!");
+        }
+        else
+        {
+            LOG_WARNING("DHT22 transmission checksum error!");
+        }
         worker::addToHigh(done, 3, 0, 0, 0);
         return;
     }
-    buffer[5] = buffer[0] + buffer[1] + buffer[2] + buffer[3] - buffer[4];
-    short h = (short)buffer[0] * 256 + (short)buffer[1];
-    short t = (short)buffer[2] * 256 + (short)buffer[3];
-    worker::addToHigh(done, 3, 1, buffer[0], buffer[1]);
+    uintptr_t h = ((uintptr_t)buffer[0] << 8) + (uintptr_t)buffer[1];
+    uintptr_t t = ((uintptr_t)buffer[2] << 8) + (uintptr_t)buffer[3];
+    worker::addToHigh(done, 3, 1, h, t);
 }
 
 static void finalizeAndParse(uintptr_t*)
@@ -174,7 +178,7 @@ static void stopSampling(bool* yield, FastTimer* t)
 
     OW_TIMER->TASKS_STOP = 1;
     NRF_PPI->CHENCLR = 1 << OW_PPI_CHANNEL;
-    NRF_GPIO->OUTSET = (1 << OW_CSN_LOOPBACK);
+    NRF_GPIO->OUTSET = 1 << OW_CSN_LOOPBACK;
     worker::addToHighFromISR(yield, finalizeAndParse, 0);
 }
 
@@ -194,7 +198,7 @@ static void startSampling(bool* yield, FastTimer*)
     OW_SPIS->EVENTS_ACQUIRED = 0;
     OW_SPIS->EVENTS_END = 0;
     OW_SPIS->RXDPTR = (uint32_t)buffer;
-    OW_SPIS->MAXRX = sizeof(buffer);
+    OW_SPIS->MAXRX = BUFFER_SIZE;
     OW_SPIS->TXDPTR = 0;
     OW_SPIS->MAXTX = 0;
     OW_SPIS->TASKS_RELEASE = 1;
@@ -231,26 +235,18 @@ static void start(uintptr_t* data)
     NRF_GPIO->DIRSET = (1 << currentPinNumber);
 
     fastTimer.callback = startSampling;
-    fastTimerStart(&fastTimer, MS2FAST(18), 0);
+    fastTimerStart(&fastTimer, MS2FAST(2), 0);
 }
 
 
-static float bcd2float(uint32_t x)
+static float dht22ToFloat(uint32_t x)
 {
     TASK_HIGH;
-    return (float)(x >> 8) + (float)(x & 0xFF) * 0.01f;
+    float f = (float)(x & 0x7FF) * 0.1f;
+    if (x & 0x8000) f = -f;
+    return f;
 }
 
-
-static void processQueue()
-{
-    TASK_HIGH;
-    if (!running && fifo.length() > 0)
-    {
-        running = true;
-        worker::addToLow(start, 1, (uintptr_t)fifo.peek().dht22->pinNumber);
-    }
-}
 
 static void done(uintptr_t* data)
 {
@@ -261,13 +257,21 @@ static void done(uintptr_t* data)
     dht22->valid = data[0];
     if (dht22->valid)
     {
-        dht22->temperature = bcd2float(data[1]);
-        dht22->humidity = bcd2float(data[2]);
+        dht22->humidity = dht22ToFloat(data[1]);
+        dht22->temperature = dht22ToFloat(data[2]);
     }
     (*callback)();
     delete callback;
-    running = false;
-    processQueue();
+
+    if (fifo.length() > 0)
+    {
+        worker::addToLow(start, 1, (uintptr_t)fifo.peek().dht22->pinNumber);
+    }
+    else
+    {
+        delete[] buffer;
+        buffer = NULL;
+    }
 }
 
 }; // namespace _internal_Dht22
@@ -276,7 +280,7 @@ using namespace _internal_Dht22;
 
 Dht22::Dht22(uint32_t pinNumber) : pinNumber(pinNumber), valid(0)
 {
-    TASK_HIGH;
+    TASK_ANY;
 }
 
 void Dht22::measure(const std::function<void()> &callback)
@@ -286,5 +290,9 @@ void Dht22::measure(const std::function<void()> &callback)
     item.dht22 = this;
     item.callback = new std::function<void()>(callback);
     fifo.push(item);
-    processQueue();
+    if (buffer == NULL)
+    {
+        buffer = new uint8_t[BUFFER_SIZE];
+        worker::addToLow(start, 1, (uintptr_t)fifo.peek().dht22->pinNumber);
+    }
 }
