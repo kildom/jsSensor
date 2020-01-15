@@ -174,6 +174,12 @@ struct _TimerHighInternal
     std::function<void()> func;
 };
 
+void _destruct_TimerHighInternal(struct _TimerHighInternal* ptr)
+{
+    ptr->~_TimerHighInternal();
+}
+
+
 static uint32_t float2ticks(float sec)
 {
     int32_t x = (int32_t)((32768.0f / (float)_PRESCALE) * sec + 0.5f);

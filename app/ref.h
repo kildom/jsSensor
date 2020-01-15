@@ -4,22 +4,30 @@
 #include <cstddef>
 
 template<class T>
+static inline void destruct(T* ptr)
+{
+    ptr->~T();
+}
+
+template<class T>
 class Ref
 {
 private:
 
-    static void inc(T* ptr) {
+    static void inc(T* ptr)
+    {
         if (!ptr) return;
         ((uintptr_t*)ptr)[-1]++;
     }
 
-    static void dec(T* ptr) {
+    static void dec(T* ptr)
+    {
         if (!ptr) return;
         uintptr_t* buffer = &((uintptr_t*)ptr)[-1];
         uintptr_t c = --(*buffer);
         if (c == 0)
         {
-            ptr->~T();
+            destruct(ptr);
             delete[] buffer;
         }
     }
