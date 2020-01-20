@@ -26,12 +26,13 @@ static const uint8_t BITS_HI = 0x80;
 
 struct QueueItem
 {
+    QueueItem(Dht22* dht22, const std::function<void()> &callback) : dht22(dht22), callback(callback) { }
     Dht22* dht22;
-    const std::function<void()>* callback;
+    std::function<void()> callback;
 };
 
 static bool initialized = false;
-static Fifo<QueueItem, DHT22_MEASURE_QUEUE_SIZE> fifo;
+static Fifo<QueueItem*, DHT22_MEASURE_QUEUE_SIZE> fifo;
 
 static uint8_t* buffer = NULL;
 static size_t samples;
@@ -251,21 +252,20 @@ static float dht22ToFloat(uint32_t x)
 static void done(uintptr_t* data)
 {
     TASK_HIGH;
-    QueueItem &item = fifo.pop();
-    const std::function<void()>* callback = item.callback;
-    Dht22* dht22 = item.dht22;
+    QueueItem* item = fifo.pop();
+    Dht22* dht22 = item->dht22;
     dht22->valid = data[0];
     if (dht22->valid)
     {
         dht22->humidity = dht22ToFloat(data[1]);
         dht22->temperature = dht22ToFloat(data[2]);
     }
-    (*callback)();
-    delete callback;
+    item->callback();
+    delete item;
 
     if (fifo.length() > 0)
     {
-        worker::addToLow(start, 1, (uintptr_t)fifo.peek().dht22->pinNumber);
+        worker::addToLow(start, 1, (uintptr_t)fifo.peek()->dht22->pinNumber);
     }
     else
     {
@@ -286,13 +286,11 @@ Dht22::Dht22(uint32_t pinNumber) : pinNumber(pinNumber), valid(0)
 void Dht22::measure(const std::function<void()> &callback)
 {
     TASK_HIGH;
-    QueueItem item;
-    item.dht22 = this;
-    item.callback = new std::function<void()>(callback);
+    QueueItem* item = new QueueItem(this, callback);
     fifo.push(item);
     if (buffer == NULL)
     {
         buffer = new uint8_t[BUFFER_SIZE];
-        worker::addToLow(start, 1, (uintptr_t)fifo.peek().dht22->pinNumber);
+        worker::addToLow(start, 1, (uintptr_t)fifo.peek()->dht22->pinNumber);
     }
 }
