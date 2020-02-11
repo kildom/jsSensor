@@ -1,0 +1,94 @@
+
+Do not use RTOS, but replace it with following:
+
+IRQ handlers -> unchanged
+
+Low level worker -> Handler for PendSV (with lowest possible priority)
+
+High level worker -> Main thread
+
+Send work to LO
+	- Add it to queue
+	- If LO is not locked Set PANDSVSET in ICSR
+	
+	addToQueue(0, item);
+	if (IS_ENABLED(CORTEX_M0))
+	{
+		__disable_irq();
+		if (lowLockCounter == 0)
+			SCB->ICSR = SCB_ICSR_PENDSVSET_Msk;
+		__enable_irq();
+	}
+	else
+	{
+		SCB->ICSR = SCB_ICSR_PENDSVSET_Msk;
+	}
+	
+Send work to HI
+	- Add it to queue
+
+
+PendSV:
+	Clear PANDSVCLR in ICSR
+	while (queue not empty):
+		read from queue
+		execute
+
+Main thread loop content:
+	read from queue and WFE if empty (with disabled interrupts)
+	execute
+	
+Useful functions (instead of mutex):
+	int LockLowLevel();
+		if (IS_ENABLED(CORTEX_M0))
+		{
+			__disable_irq();
+			lowLockCounter++;
+			__enable_irq();
+			return 0;
+		}
+		else
+		{
+			return _set_interrupt_priority(PENDSV_LOCK_PRIO);
+		}
+	UnlockLowLevel(key);
+		if (IS_ENABLED(CORTEX_M0))
+		{
+			__disable_irq();
+			int c = --lowLockCounter;
+			__enable_irq();
+			if (c == 0 && !queueEmpty(0))
+				SCB->ICSR = SCB_ICSR_PENDSVSET_Msk;
+		}
+		else
+		{
+			return _set_interrupt_priority(key);
+		}
+	or class LowLevelLocker { ... }
+	other for IRQ locking based on normal IRQ locking
+	
+
+OR Locking only part of low level work (up to 32 modules, one per each bit)
+	void addToLowQueue(..., lockBits)
+		
+	PendSV:
+		Clear PANDSVCLR in ICSR
+		while (!queue.empty() && (queue.top()->lockBits & currenlyLockedBits) == 0):
+			read from queue
+			execute
+	
+	lockLow(lockBits)
+		__disable_irq();
+		oldBits = currenlyLockedBits;
+		currenlyLockedBits = oldBits | lockBits;
+		__enable_irq();
+		return oldBits;
+
+	unlockLow(oldBits)
+		__disable_irq();
+		curBits = currenlyLockedBits;
+		currenlyLockedBits = oldBits;
+		__enable_irq();
+		if ((curBits ^ oldBits) && !queueEmpty(0))
+			SCB->ICSR = SCB_ICSR_PENDSVSET_Msk;
+	
