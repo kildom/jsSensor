@@ -17,11 +17,9 @@ __attribute__((section(".isr_vector"))
 const void* __isr_vector[IRQ_VECTOR_TABLE_SIZE / 4] = {
     (void*)RAM_END,
     (void*)&Reset_Handler,
+    // Rest will be initialized with:
     // 0, 0, 0, 0, ...
 };
-
-UNINITIALIZED_DATA
-static bool isrTableDirty;
 
 UNINITIALIZED_DATA
 static bool appValid;
@@ -30,6 +28,28 @@ static bool appValid;
 static inline void* _LONG_JUMP_helper(void* p) {
 	__asm__ volatile ("":"+r"(p));
 	return p;
+}
+              
+uint32_t shadowBuffer[BOOTLOADER_SIZE / 4];
+bool shadowCreated = false;
+              
+void createShadow()
+{
+    if (!shadowCreated) {
+        wordCopy(shadowBuffer, (void*)FLASH_START_ADDR, BOOTLOADER_SIZE);
+        shadowCreated = true;
+    }
+}
+              
+void checkISRTable()
+{
+    if (memcmp((uint8_t*)FLASH_START_ADDR + 8, (uint8_t*)BOOTLOADER_SIZE + 8, IRQ_VECTOR_TABLE_SIZE - 8) != 0) {
+        createShadow();
+        wordCopy((uint8_t*)bootloaderShadowCopy + 8, (uint8_t*)BOOTLOADER_SIZE + 8, IRQ_VECTOR_TABLE_SIZE - 8);
+        const uint32_t copyPages = (IRQ_VECTOR_TABLE_SIZE + PAGE_SIZE - 1) / PAGE_SIZE;
+        flashErasePages(0, copyPages - 1);
+        wordCopy((void*)FLASH_START_ADDR, shadowBuffer, copyPages * PAGE_SIZE);
+    }
 }
 
 FLASH_ONLY
@@ -50,11 +70,17 @@ void Reset_Handler()
         *dst++ = 0;
     }
     
-    appValid = *(uint64_t*)BOOTLOADER_SIZE != 0 && *(uint64_t*)BOOTLOADER_SIZE != 0xFFFFFFFFFFFFFFFFuLL;
+    appValid = *(uint32_t*)BOOTLOADER_SIZE != 0
+        && *(uint32_t*)(BOOTLOADER_SIZE + 4) != 0
+        && *(uint32_t*)BOOTLOADER_SIZE != 0xFFFFFFFF
+        && *(uint32_t*)(BOOTLOADER_SIZE + 4) != 0xFFFFFFFF;
     
-    isrTableDirty = (memcmp_L((uint8_t*)FLASH_START_ADDR + 8, (uint8_t*)BOOTLOADER_SIZE + 8, IRQ_VECTOR_TABLE_SIZE - 8) != 0);
+    if (appValid)
+    {
+        checkISRTable_L();
+    }
     
-    if (appValid && !isrTableDirty && resetReasonIsSwReset())
+    if (appValid && resetReasonIsSwReset())
     {
         __asm__ volatile("mov SP, %1    \n"
                          "bx  %2        \n"
@@ -62,7 +88,7 @@ void Reset_Handler()
     }
     
     SystemInit();
-    _start();
+    _start_L();
 }
         
 
@@ -70,49 +96,41 @@ void Reset_Handler()
 #define radioRx_L LONG_JUMP(radioRx)
 #define randInRange_L LONG_JUMP(randInRange)
 
+void mainLoop()
+{
+    
+}
+
+#define mainLoop_L LONG_JUMP(mainLoop)
               
 FLASH_ONLY
 int main()
 {
     int i;
+    enum { IDLE_DELAY, CATCH_DELAY } state = IDLE_DELAY;
+    uint32_t longTimeout = appValid ? WAIT_FOR_CATCH_TIMEOUT : MAX_TIMEOUT;
+    uint32_t timeout = longTimeout;
 
     radioInit();
+    randInit();
 
-    // Wait for `catch` packet
-    timerStart_L();
-    radioRx_L();
-    uint32_t delay = randInRange_L(TIMER_MS(1), TIMER_MS(10));
-    if (!radioRecvCatch(WAIT_FOR_CATCH_TIMEOUT))
-    {
-        // There is no `catch` packet, so do soft reset to start application
-        deviceSoftReset();
-    }
-    
-    prepareCaughtPacket();
-    bool packetSend = false;
-    enum { CAUGHT_DELAY, 
-    
     do {
-        timerStart();
-        radioRecvCatchOrBootloader(delay);
+        radioRecvCatchOrBootloader(timeout); // if 'run bootloader' is not prepared yet then only receive 'catch'
         if (radioIsRunBootloader()) {
             break;
         } else if (radioIsCatch()) {
-            delay = randInRange(TIMER_MS(1), TIMER_MS(18));
-            continue;
+            state = CATCH_DELAY;
+            timeout = randInRange(TIMER_MS(1), TIMER_MS(18));
+        } else if (state == CATCH_DELAY) {
+            radioSendCaughtPacket(); // also prepares 'run bootloader' to compare later
+            state = IDLE_DELAY;
+            timeout = longTimeout;
+        } else if (state == IDLE_DELAY && appValid) {
+            deviceSoftReset(0);
         }
-        radioSendCaughtPacket();
-        radioRecvCatchOrBootloader(WAIT_FOR_CATCH_TIMEOUT);
-        if (radioIsRunBootloader()) {
-            break;
-        } else if (radioIsCatch()) {
-            delay = randInRange(TIMER_MS(1), TIMER_MS(18));
-            continue;
-        }
-        deviceSoftReset();
     } while (true);
-
-    secondStage(0);
-
-    return 0;
+    
+    mainLoop_L();
+    
+    while(1){};
 }
