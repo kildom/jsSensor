@@ -29,8 +29,11 @@ static inline void* _LONG_JUMP_helper(void* p) {
 	__asm__ volatile ("":"+r"(p));
 	return p;
 }
+
               
+UNINITIALIZED_DATA
 uint32_t shadowBuffer[BOOTLOADER_SIZE / 4];
+              
 bool shadowCreated = false;
               
 void createShadow()
@@ -51,6 +54,9 @@ void checkISRTable()
         wordCopy((void*)FLASH_START_ADDR, shadowBuffer, copyPages * PAGE_SIZE);
     }
 }
+              
+void _start();
+#define _start_L LONG_JUMP(_start);
 
 FLASH_ONLY
 void Reset_Handler()
@@ -82,6 +88,7 @@ void Reset_Handler()
     
     if (appValid && resetReasonIsSwReset())
     {
+        // TODO: lock boot region
         __asm__ volatile("mov SP, %1    \n"
                          "bx  %2        \n"
                          :: "r"(*(uint32_t*)BOOTLOADER_SIZE), "r"(*(uint32_t*)(BOOTLOADER_SIZE + 4)));
@@ -98,7 +105,105 @@ void Reset_Handler()
 
 void mainLoop()
 {
+    createShadow();
     
+    timerDelay(BOOTLOADER_RUNNING_DELAY);
+    packetBootloaderRunning();
+    
+    while (true)
+    {
+        radioSendRecv();
+        
+        if (packetIsRunBootloader())
+        {
+            timerDelay(BOOTLOADER_RUNNING_DELAY);
+            packetBootloaderRunning();
+            continue;
+        }
+
+        PacketFlags flags = packetFlags();
+
+        if (flags & CHECK_HASH)
+        {
+            aes_sahf_init();
+            if (flags & USE_BOOTLOADER)
+            {
+                aes_sahf_calc(shadowBuffer, BOOTLOADER_SIZE);
+            }
+            else
+            {
+		        uint32_t firstBlock = packetFirstBlock();
+		        uint32_t lastBlock = packetLastBlock();
+                aes_sahf_calc(packetData(), BLOCK_SIZE);
+		        if (firstBlock <= lastBlock && firstBlock < FLASH_SIZE / BLOCK_SIZE && lastBlock < FLASH_SIZE / BLOCK_SIZE) {
+                    aes_sahf_calc((void*)(BOOTLOADER_SIZE + firstBlock * BLOCK_SIZE),
+                        (lastBlock - firstBlock + 1) * BLOCK_SIZE);
+                }
+            }
+            if (!aes_sahf_verify(packetHash()))
+            {
+                packetRspFlag(RSP_INVALID_HASH);
+                continue;
+            }
+            packetRspFlag(RSP_VALID_HASH);
+        }
+
+        if (flags & ERASE_PAGES)
+        {
+            flashErasePages(packetPageFrom(), packetPageTo());
+            packetRspFlag(RSP_ERASE_DONE);
+        }
+
+        if (flags & WRITE_BLOCK)
+        {
+            uint32_t block = packetBlock();
+            uint32_t bank = block >> 5;
+            if (blockBank != bank)
+            {
+                blockBitmap = 0;
+                blockBank = bank;
+            }
+            blockBitmap |= 1 << (block & 31);
+
+            if (flags & USE_BOOTLOADER)
+            {
+                if (block < (BOOTLOADER_SIZE / BLOCK_SIZE)) {
+                    blockCopy((uint8_t*)bootloaderCopy + block * BLOCK_SIZE, packetData());
+                }
+            }
+            else if (block < (FLASH_SIZE - BOOTLOADER_SIZE) / BLOCK_SIZE)
+            {
+                blockCopy((uint8_t*)FLASH_START_ADDR + BOOTLOADER_SIZE + block * BLOCK_SIZE, packetData());
+            }
+        }
+
+        if (flags & GET_STATUS)
+        {
+            packetRspFlag(RSP_STATUS);
+            packetRspBank(blockBank);
+            packetRspStatus(blockBitmap);
+        }
+
+        if (flags & FLASH_BOOTLOADER)
+        {
+            if (appValid)
+                memcpy((uint8_t*)bootloaderCopy + 8, (uint8_t*)BOOTLOADER_SIZE + 8, IRQ_VECTOR_TABLE_SIZE - 8);
+            flashErasePages(0, BOOTLOADER_SIZE / PAGE_SIZE - 1);
+            wordCopy((void*)FLASH_START_ADDR, bootloaderCopy, BOOTLOADER_SIZE);
+            packetRspFlag(RSP_BOOTLOADER_FLASHED);
+        }
+
+        if (flags & CHECK_IRQ_TABLE)
+        {
+            checkISRTable();
+            packetRspFlag(RSP_IRQ_TABLE_CHECKED);
+        }
+
+        if (flags & RUN_APP)
+        {
+            deviceSoftReset();
+        }
+    }
 }
 
 #define mainLoop_L LONG_JUMP(mainLoop)
