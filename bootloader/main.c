@@ -112,7 +112,7 @@ void mainLoop()
     
     while (true)
     {
-        radioSendRecv();
+        radioSendRecv(anyChangeDone ? INFINITE_TIMEOUT : BOOTLOADER_IDLE_TIMEOUT);
         
         if (packetIsRunBootloader())
         {
