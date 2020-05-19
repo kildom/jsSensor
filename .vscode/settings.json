@@ -1,0 +1,3 @@
+{
+	"C_Cpp.default.defines": ["NRF52832_XXAA=1", "NRF52=1"]
+}
