@@ -48,6 +48,7 @@ void Reset_Handler()
 	extern uint32_t __size_rambss;
 
 	memCopyAligned_F(&__begin_code_ram_dst, &__begin_code_ram_src, (size_t)&__size_to_copy);
+	// TODO: No need for a new function, because memset is available at this point
 	memZeroAligned_F(&__begin_rambss, (size_t)&__size_rambss);
 
 	//SystemInit();
