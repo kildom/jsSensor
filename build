@@ -1,0 +1,6 @@
+#!/bin/bash
+
+set -e
+
+clang++ -fcoroutines-ts -std=c++2a -stdlib=libc++ ../corout/main.cpp -o main
+./main
