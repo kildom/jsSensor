@@ -2,5 +2,5 @@
 
 set -e
 
-clang++ -fcoroutines-ts -std=c++2a -stdlib=libc++ ../corout/main.cpp -o main
+c++ -fcoroutines -std=c++20 ../cppcoro/main.cpp -o main
 ./main

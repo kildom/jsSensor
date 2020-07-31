@@ -6,7 +6,7 @@
         {
             "label": "echo",
             "type": "shell",
-            "command": "${workspaceFolder}/build",
+            "command": "bash ${workspaceFolder}/build",
             "group": {
                 "kind": "build",
                 "isDefault": true

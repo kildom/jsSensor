@@ -1,128 +1,154 @@
 
 #include <stdio.h>
-#include <experimental/coroutine>
+#include <coroutine>
 
 #include <stack>
 
-std::stack<std::experimental::coroutine_handle<>> stack;
+std::stack<std::coroutine_handle<>> stack;
 
-
-struct promise
+template <typename RT>
+class PromiseBase
 {
-    using promise_type = promise;
-    using coro_handle = std::experimental::coroutine_handle<>;
-    promise() {
-        volatile int x;
-        printf("---- %s %p %p\n", __FUNCTION__, (void*)this, (void*)&x);
-    }
-    promise* get_return_object()
-    {
-        //auto x = (std::experimental::coroutine_handle<promise>::from_promise(*this));
-        //printf("%p %p\n", (void*)this, x.address());
-        return this;
-    }
-    auto initial_suspend()
-    {
-        printf("initial\n");
-        return std::experimental::suspend_always();
-    }
-    auto final_suspend() noexcept
-    {
-        printf("final\n");
-        return std::experimental::suspend_always();
-    }
+public:
+    RT result;
+    std::coroutine_handle<> handle;
+    std::exception_ptr exception;
+};
+
+template <>
+class PromiseBase<void>
+{
+public:
+    std::coroutine_handle<> handle;
+};
+
+template <typename RT>
+class PromiseAsync;
+
+#define _ //printf("--------------- %s::%s %p\n", typeid(*this).name(), __FUNCTION__, this);
+
+template <typename RT>
+class Async
+{
+public:
+    using promise_type = PromiseAsync<RT>;
+    PromiseBase<RT> *p;
+    Async(PromiseBase<RT> *p) : p(p) { _ }
+    bool await_ready() { _ return false; }
+    void await_suspend(std::coroutine_handle<> h) { _ p->handle = h; }
+    RT await_resume() { _ return p->result; }
+};
+
+template <>
+class Async<void>
+{
+public:
+    using promise_type = PromiseAsync<void>;
+    PromiseBase<void> *p;
+    Async(PromiseBase<void> *p) : p(p) { _ }
+    bool await_ready() { _ return false; }
+    void await_suspend(std::coroutine_handle<> h) { _ p->handle = h; }
+    void await_resume() { _ }
+};
+
+template <typename RT>
+class PromiseAsync : private PromiseBase<RT>
+{
+public:
+    PromiseAsync(){_};
+    PromiseAsync(const PromiseAsync &) = delete;
+    PromiseAsync &operator=(const PromiseAsync &) = delete;
+    Async<RT> get_return_object() { _ return Async<RT>(this); }
+    auto initial_suspend() noexcept { _ return std::suspend_never(); }
+    auto final_suspend() noexcept { _ return std::suspend_never(); }
     void unhandled_exception()
     {
+        _
+            _ printf("EX\n");
         std::terminate();
     }
-    void return_value(int value)
+    void return_value(const RT &value)
     {
-        printf("RETURN %d\n", (int)value);
-    }
-    bool await_ready()
-    {
-        return false;
-    }
-    void await_suspend(const coro_handle &x)
-    {
-        stack.push(std::experimental::coroutine_handle<promise>::from_promise(*this));
-    }
-    int await_resume()
-    {
-        return 100;
+        _ this->result = value;
+        if (this->handle != nullptr)
+            this->handle.resume();
     }
 };
 
-/**struct resumable
+template <>
+class PromiseAsync<void> : private PromiseBase<void>
 {
-    using promise_type = promise;
-    using coro_handle = std::experimental::coroutine_handle<>;
-    coro_handle handle;
-    resumable(const coro_handle &handle) : handle(handle)
+public:
+    PromiseAsync(){_};
+    PromiseAsync(const PromiseAsync &) = delete;
+    PromiseAsync &operator=(const PromiseAsync &) = delete;
+    Async<void> get_return_object() { _ return Async<void>(this); }
+    auto initial_suspend() noexcept { _ return std::suspend_never(); }
+    auto final_suspend() noexcept { _ return std::suspend_never(); }
+    void unhandled_exception()
     {
+        _ printf("EX\n");
+        std::terminate();
     }
-    bool await_ready()
+    void return_void()
     {
-        return false;
+        _ if (this->handle != nullptr) this->handle.resume();
     }
-    void await_suspend(const coro_handle &x)
-    {
-        stack.push(handle);
-        printf("PUSH %d\n", (int)(long long)stack.top().address());
-    }
-    int await_resume()
-    {
-        return 100;
-    }
-};*/
-
-template<>
-struct
-std::experimental::coroutines_v1::coroutine_traits<promise*>
-{
-    using promise_type = promise;
 };
 
-promise* bar()
+struct MyStream : private PromiseBase<int>
 {
-    printf("Hello 2\n");
-    co_await std::experimental::suspend_always();
-    printf("World 2\n");
-    co_return 12;
+
+    Async<int> read()
+    {
+        _ return Async<int>(this);
+    }
+
+    void feed(int data)
+    {
+        _
+            result = data;
+        std::coroutine_handle<> h(handle);
+        handle = nullptr;
+        if (h != nullptr)
+        {
+            h.resume();
+        }
+    }
+};
+
+Async<int> read_test(MyStream &ms)
+{
+    int sum = 0;
+    for (int i = 0; i < 10; i++)
+    {
+        int data = co_await ms.read();
+        sum += data;
+        printf("DATA: %d\n", data);
+    }
+    co_return sum;
 }
 
-
-promise* foo()
+Async<void> ff(MyStream &ms)
 {
-    printf("Hello\n");
-    co_await std::experimental::suspend_always();
-    printf("World\n");
-    int x = co_await *bar();
-    printf("BAR %d\n", x);
-    co_return 12;
+    printf(">>1\n");
+    int a = co_await read_test(ms);
+    printf(">>2\n");
+    int b = co_await read_test(ms);
+    printf("ab %d %d\n", a, b);
+    printf(">>3\n");
+    b = co_await read_test(ms);
+    printf("ab %d %d\n", a, b);
 }
 
 int main()
 {
-    printf("start\n");
-    promise* x = foo();
-    stack.push(std::experimental::coroutine_handle<promise>::from_promise(*x));
-    printf("PUSH %d\n", (int)(long long)stack.top().address());
-    printf("return\n");
-    while (stack.size() > 0)
+    MyStream ms;
+    ff(ms);
+    for (int i = 10; i < 110; i++)
     {
-        printf("stack %d\n", (int)stack.size());
-        promise::coro_handle &top = stack.top();
-        if (top.done())
-        {
-            printf("stack.top.done\n");
-            stack.pop();
-        }
-        else
-        {
-            printf("stack.top.resume\n");
-            top.resume();
-        }
+        //printf("--%d\n", i);
+        ms.feed(i);
     }
     return 0;
 }
