@@ -2,98 +2,114 @@
 #include <stdio.h>
 #include <coroutine>
 
-#include <stack>
+#include <deque>
 
-std::stack<std::coroutine_handle<>> stack;
+std::deque<std::coroutine_handle<>> resumeQueue;
+bool coActive = false;
 
-template <typename RT>
+void resume(std::coroutine_handle<> handle)
+{
+    if (handle == nullptr)
+    {
+        return;
+    }
+    else if (coActive)
+    {
+        resumeQueue.push_back(handle);
+    }
+    else
+    {
+        coActive = true;
+        handle.resume();
+        while (!resumeQueue.empty())
+        {
+            handle = resumeQueue.front();
+            resumeQueue.pop_front();
+            handle.resume();
+        }
+        coActive = false;
+    }
+}
+
+template<typename RT>
+class Async;
+
+template<typename RT>
 class PromiseBase
 {
 public:
-    RT result;
     std::coroutine_handle<> handle;
-    std::exception_ptr exception;
+    Async<RT>* async;
 };
 
-template <>
+template<>
 class PromiseBase<void>
 {
 public:
     std::coroutine_handle<> handle;
 };
 
-template <typename RT>
+template<typename RT>
 class PromiseAsync;
 
-#define _ //printf("--------------- %s::%s %p\n", typeid(*this).name(), __FUNCTION__, this);
-
-template <typename RT>
+template<typename RT>
 class Async
 {
 public:
     using promise_type = PromiseAsync<RT>;
     PromiseBase<RT> *p;
-    Async(PromiseBase<RT> *p) : p(p) { _ }
-    bool await_ready() { _ return false; }
-    void await_suspend(std::coroutine_handle<> h) { _ p->handle = h; }
-    RT await_resume() { _ return p->result; }
+    RT result;
+    Async() = delete;// : p(nullptr) { printf("()\n"); }
+    Async(PromiseBase<RT> *p) : p(p) { p->async = this; printf("(PromiseBase *p)\n"); }
+    Async(const Async &a) = delete;// : p(a.p) { printf("(const Async &a)\n"); }
+    Async(Async &&a) : p(a.p), result(a.result) { a.p = nullptr; if (p) p->async = this; }
+    ~Async() { if (p != nullptr) p->async = nullptr; printf("~\n"); }
+    Async &operator=(const Async &a) = delete;
+    bool await_ready() { return false; }
+    void await_suspend(std::coroutine_handle<> h) { p->handle = h; }
+    RT await_resume() { return result; }
 };
 
-template <>
+template<>
 class Async<void>
 {
 public:
     using promise_type = PromiseAsync<void>;
     PromiseBase<void> *p;
-    Async(PromiseBase<void> *p) : p(p) { _ }
-    bool await_ready() { _ return false; }
-    void await_suspend(std::coroutine_handle<> h) { _ p->handle = h; }
-    void await_resume() { _ }
+    Async() {}
+    Async(PromiseBase<void> *p) : p(p) { }
+    bool await_ready() { return false; }
+    void await_suspend(std::coroutine_handle<> h) { p->handle = h; }
+    void await_resume() { }
 };
 
-template <typename RT>
+template<typename RT>
 class PromiseAsync : private PromiseBase<RT>
 {
 public:
-    PromiseAsync(){_};
+    PromiseAsync() {}
     PromiseAsync(const PromiseAsync &) = delete;
+    ~PromiseAsync() { if (this->async != nullptr) this->async->p = nullptr; }
     PromiseAsync &operator=(const PromiseAsync &) = delete;
-    Async<RT> get_return_object() { _ return Async<RT>(this); }
-    auto initial_suspend() noexcept { _ return std::suspend_never(); }
-    auto final_suspend() noexcept { _ return std::suspend_never(); }
-    void unhandled_exception()
-    {
-        _
-            _ printf("EX\n");
-        std::terminate();
-    }
-    void return_value(const RT &value)
-    {
-        _ this->result = value;
-        if (this->handle != nullptr)
-            this->handle.resume();
-    }
+    Async<RT> get_return_object() { printf("Create\n"); return Async<RT>(this); }
+    auto initial_suspend() noexcept { return std::suspend_never(); }
+    auto final_suspend() noexcept { return std::suspend_never(); }
+    void unhandled_exception() { std::terminate(); }
+    void return_value(RT x) { if (this->async != nullptr) this->async->result = x; resume(this->handle); }
 };
 
-template <>
+template<>
 class PromiseAsync<void> : private PromiseBase<void>
 {
 public:
-    PromiseAsync(){_};
+    PromiseAsync() {}
     PromiseAsync(const PromiseAsync &) = delete;
     PromiseAsync &operator=(const PromiseAsync &) = delete;
-    Async<void> get_return_object() { _ return Async<void>(this); }
-    auto initial_suspend() noexcept { _ return std::suspend_never(); }
-    auto final_suspend() noexcept { _ return std::suspend_never(); }
-    void unhandled_exception()
-    {
-        _ printf("EX\n");
-        std::terminate();
-    }
-    void return_void()
-    {
-        _ if (this->handle != nullptr) this->handle.resume();
-    }
+    Async<void> get_return_object() { printf("Create\n"); return Async<void>(this); }
+    auto initial_suspend() noexcept { return std::suspend_never(); }
+    auto final_suspend() noexcept { return std::suspend_never(); }
+    void unhandled_exception() { std::terminate(); }
+    void return_void() { resume(this->handle); }
 };
 
 struct MyStream : private PromiseBase<int>
@@ -101,18 +117,18 @@ struct MyStream : private PromiseBase<int>
 
     Async<int> read()
     {
-        _ return Async<int>(this);
+        return Async<int>(this);
     }
 
     void feed(int data)
     {
-        _
-            result = data;
+        if (async != nullptr)
+            async->result = data;
         std::coroutine_handle<> h(handle);
         handle = nullptr;
         if (h != nullptr)
         {
-            h.resume();
+            resume(h);
         }
     }
 };
@@ -137,7 +153,9 @@ Async<void> ff(MyStream &ms)
     int b = co_await read_test(ms);
     printf("ab %d %d\n", a, b);
     printf(">>3\n");
-    b = co_await read_test(ms);
+    auto x = read_test(ms);
+    auto y = std::move(x);
+    b = co_await y;
     printf("ab %d %d\n", a, b);
 }
 
