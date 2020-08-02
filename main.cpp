@@ -7,6 +7,7 @@
 std::deque<std::coroutine_handle<>> resumeQueue;
 bool coActive = false;
 
+
 void resume(std::coroutine_handle<> handle)
 {
     if (handle == nullptr)
@@ -31,8 +32,14 @@ void resume(std::coroutine_handle<> handle)
     }
 }
 
+
 template<typename RT>
 class Async;
+
+
+template<typename RT>
+class PromiseAsync;
+
 
 template<typename RT>
 class PromiseBase
@@ -42,6 +49,7 @@ public:
     Async<RT>* async;
 };
 
+
 template<>
 class PromiseBase<void>
 {
@@ -49,8 +57,6 @@ public:
     std::coroutine_handle<> handle;
 };
 
-template<typename RT>
-class PromiseAsync;
 
 template<typename RT>
 class Async
@@ -58,16 +64,17 @@ class Async
 public:
     using promise_type = PromiseAsync<RT>;
     PromiseBase<RT> *p;
-    RT result;
-    Async() = delete;// : p(nullptr) { printf("()\n"); }
-    Async(PromiseBase<RT> *p) : p(p) { p->async = this; printf("(PromiseBase *p)\n"); }
-    Async(const Async &a) = delete;// : p(a.p) { printf("(const Async &a)\n"); }
-    Async(Async &&a) : p(a.p), result(a.result) { a.p = nullptr; if (p) p->async = this; }
-    ~Async() { if (p != nullptr) p->async = nullptr; printf("~\n"); }
+    RT r;
+    Async() : p(nullptr) {};
+    Async(PromiseBase<RT> *p) : p(p) { p->async = this; }
+    Async(const Async &a) = delete;
+    Async(Async &&a) : p(a.p), r(std::move(a.r)) { a.p = nullptr; if (p) p->async = this; }
+    ~Async() { if (p != nullptr) p->async = nullptr; }
     Async &operator=(const Async &a) = delete;
+    Async &operator=(Async &&a) { p = a.p; r = std::move(a.r); a.p = nullptr; if (p) p->async = this; return *this; }
     bool await_ready() { return false; }
     void await_suspend(std::coroutine_handle<> h) { p->handle = h; }
-    RT await_resume() { return result; }
+    RT await_resume() { return r; }
 };
 
 template<>
@@ -95,7 +102,7 @@ public:
     auto initial_suspend() noexcept { return std::suspend_never(); }
     auto final_suspend() noexcept { return std::suspend_never(); }
     void unhandled_exception() { std::terminate(); }
-    void return_value(RT x) { if (this->async != nullptr) this->async->result = x; resume(this->handle); }
+    void return_value(RT x) { if (this->async != nullptr) this->async->r = x; resume(this->handle); }
 };
 
 template<>
@@ -123,7 +130,7 @@ struct MyStream : private PromiseBase<int>
     void feed(int data)
     {
         if (async != nullptr)
-            async->result = data;
+            async->r = data;
         std::coroutine_handle<> h(handle);
         handle = nullptr;
         if (h != nullptr)
@@ -154,7 +161,8 @@ Async<void> ff(MyStream &ms)
     printf("ab %d %d\n", a, b);
     printf(">>3\n");
     auto x = read_test(ms);
-    auto y = std::move(x);
+    Async<int> y;
+    y = std::move(x);
     b = co_await y;
     printf("ab %d %d\n", a, b);
 }
