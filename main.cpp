@@ -1,180 +1,145 @@
 
+#include <stdint.h>
 #include <stdio.h>
-#include <coroutine>
+#include <stddef.h>
+#include <stdlib.h>
+#include <utility>
+#include <type_traits>
+#include <malloc.h>
 
-#include <deque>
+#include "myprintf.hh"
+#include "async.hh"
 
-std::deque<std::coroutine_handle<>> resumeQueue;
-bool coActive = false;
+class PromiseAlloc;
 
-
-void resume(std::coroutine_handle<> handle)
+void* operator new(size_t size, const PromiseAlloc&)
 {
-    if (handle == nullptr)
-    {
-        return;
-    }
-    else if (coActive)
-    {
-        resumeQueue.push_back(handle);
-    }
-    else
-    {
-        coActive = true;
-        handle.resume();
-        while (!resumeQueue.empty())
-        {
-            handle = resumeQueue.front();
-            resumeQueue.pop_front();
-            handle.resume();
-        }
-        coActive = false;
-    }
+    return malloc(size);
+}
+
+void operator delete(void *ptr, const PromiseAlloc&)
+{
+    return free(ptr);
+}
+
+void operator ^(const PromiseAlloc&, Promise* promise)
+{
+    promise->~Promise();
+    free(promise);
 }
 
 
-template<typename RT>
-class Async;
+class MyStream : private Awaitable {
+    public:
 
+    int temp;
 
-template<typename RT>
-class PromiseAsync;
-
-
-template<typename RT>
-class PromiseBase
-{
-public:
-    std::coroutine_handle<> handle;
-    Async<RT>* async;
-};
-
-
-template<>
-class PromiseBase<void>
-{
-public:
-    std::coroutine_handle<> handle;
-};
-
-
-template<typename RT>
-class Async
-{
-public:
-    using promise_type = PromiseAsync<RT>;
-    PromiseBase<RT> *p;
-    RT r;
-    Async() : p(nullptr) {};
-    Async(PromiseBase<RT> *p) : p(p) { p->async = this; }
-    Async(const Async &a) = delete;
-    Async(Async &&a) : p(a.p), r(std::move(a.r)) { a.p = nullptr; if (p) p->async = this; }
-    ~Async() { if (p != nullptr) p->async = nullptr; }
-    Async &operator=(const Async &a) = delete;
-    Async &operator=(Async &&a) { p = a.p; r = std::move(a.r); a.p = nullptr; if (p) p->async = this; return *this; }
-    bool await_ready() { return false; }
-    void await_suspend(std::coroutine_handle<> h) { p->handle = h; }
-    RT await_resume() { return r; }
-};
-
-template<>
-class Async<void>
-{
-public:
-    using promise_type = PromiseAsync<void>;
-    PromiseBase<void> *p;
-    Async() {}
-    Async(PromiseBase<void> *p) : p(p) { }
-    bool await_ready() { return false; }
-    void await_suspend(std::coroutine_handle<> h) { p->handle = h; }
-    void await_resume() { }
-};
-
-template<typename RT>
-class PromiseAsync : private PromiseBase<RT>
-{
-public:
-    PromiseAsync() {}
-    PromiseAsync(const PromiseAsync &) = delete;
-    ~PromiseAsync() { if (this->async != nullptr) this->async->p = nullptr; }
-    PromiseAsync &operator=(const PromiseAsync &) = delete;
-    Async<RT> get_return_object() { printf("Create\n"); return Async<RT>(this); }
-    auto initial_suspend() noexcept { return std::suspend_never(); }
-    auto final_suspend() noexcept { return std::suspend_never(); }
-    void unhandled_exception() { std::terminate(); }
-    void return_value(RT x) { if (this->async != nullptr) this->async->r = x; resume(this->handle); }
-};
-
-template<>
-class PromiseAsync<void> : private PromiseBase<void>
-{
-public:
-    PromiseAsync() {}
-    PromiseAsync(const PromiseAsync &) = delete;
-    PromiseAsync &operator=(const PromiseAsync &) = delete;
-    Async<void> get_return_object() { printf("Create\n"); return Async<void>(this); }
-    auto initial_suspend() noexcept { return std::suspend_never(); }
-    auto final_suspend() noexcept { return std::suspend_never(); }
-    void unhandled_exception() { std::terminate(); }
-    void return_void() { resume(this->handle); }
-};
-
-struct MyStream : private PromiseBase<int>
-{
-
-    Async<int> read()
+    Awaitable* read()
     {
-        return Async<int>(this);
+        return this;
+    }
+
+    static void immediateResolve(Awaitable* a, void*)
+    {
+        MyStream* th = (MyStream*)a;
+        *(int*)th->result = th->temp;
     }
 
     void feed(int data)
     {
-        if (async != nullptr)
-            async->r = data;
-        std::coroutine_handle<> h(handle);
-        handle = nullptr;
-        if (h != nullptr)
+        if (postpone(immediateResolve, nullptr))
         {
-            resume(h);
+            temp = data;
+        }
+        else
+        {
+            *(int*)result = data;
+            resolve();
         }
     }
+
 };
 
-Async<int> read_test(MyStream &ms)
+struct _sum_state : public Promise
 {
-    int sum = 0;
-    for (int i = 0; i < 10; i++)
-    {
-        int data = co_await ms.read();
-        sum += data;
-        printf("DATA: %d\n", data);
-    }
-    co_return sum;
+    MyStream& s;
+    int sum;
+    int i;
+    int x;
+    _sum_state(CoroutineBodyFuncT body, MyStream& s) : Promise(body), s(s) { }
+};
+
+
+Async<int> sum(MyStream& s)
+{
+    void sum_body_(Promise *_p);
+    LOG_DBG("Allocating coroutine");
+    return new(promiseAlloc) _sum_state(sum_body_, s);
 }
 
-Async<void> ff(MyStream &ms)
+void sum_body_(Promise *_p)
 {
-    printf(">>1\n");
-    int a = co_await read_test(ms);
-    printf(">>2\n");
-    int b = co_await read_test(ms);
-    printf("ab %d %d\n", a, b);
-    printf(">>3\n");
-    auto x = read_test(ms);
-    Async<int> y;
-    y = std::move(x);
-    b = co_await y;
-    printf("ab %d %d\n", a, b);
+    _sum_state *_state = (_sum_state*)_p;
+    MyStream &s = _state->s;
+    int &sum = _state->sum;
+    int &i = _state->i;
+    int &x = _state->x;
+
+    if (_state->resumePoint) {
+        LOG_DBG("Coroutine jumps to resume point");
+        goto *(_state->resumePoint);
+    } else {
+        LOG_DBG("Coroutine started");
+    }
+
+    __asm__ volatile ("nop\nnop\nnop\nnop\n");
+
+    sum = 0;
+    for (i = 0; i < 10; i++) {
+        if (_state->suspend(&&_coro_resume0, s.read(), &x)) {
+            LOG_DBG("Coroutine suspended");
+            return;
+        }
+        _coro_resume0:;
+    __asm__ volatile ("nop\nnop\nnop\nnop\n");
+        myPrintf("Got: %d\n", x);
+        sum += x;
+    }
+
+    __asm__ volatile ("nop\nnop\nnop\nnop\n");
+    LOG_DBG("Returning from coroutine");
+    if (_state->result) {
+        LOG_DBG("Result moved to destination");
+        *(int*)_state->result = std::move(sum);
+    } else {
+        LOG_DBG("Result ignored");
+    }
+    LOG_DBG("Resolving this coroutine");
+    __asm__ volatile ("nop\nnop\nnop\nnop\n");
+    _state->resolve();
+    LOG_DBG("Deallocating this coroutine");
+    promiseAlloc ^ _state;
 }
 
-int main()
-{
-    MyStream ms;
-    ff(ms);
-    for (int i = 10; i < 110; i++)
-    {
-        //printf("--%d\n", i);
-        ms.feed(i);
+
+int main() {
+    int res;
+    myPrintf("JEST %d '%s'\n", 12, "OK");
+    MyStream str;
+    Async<int> a = sum(str);
+    a->result = &res;
+    str.feed(10);
+    Promise::execute();
+    Promise::execute();
+    str.feed(11);
+    str.feed(12);
+    Promise::execute();
+    for (int i = 13; i < 23; i++) {
+        str.feed(i);
+        Promise::execute();
+        Promise::execute();
     }
+    myPrintf("RES: %d\n", res);
+    svcExit();
     return 0;
 }

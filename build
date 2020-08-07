@@ -2,5 +2,40 @@
 
 set -e
 
-c++ -fcoroutines -std=c++20 ../cppcoro/main.cpp -o main
-./main
+#c++ -fcoroutines -std=c++20 ../cppcoro/main.cpp -o main
+#./main
+
+/c/work/gcc10/bin/arm-none-eabi-gcc \
+        -Os -g3 -fdata-sections -ffunction-sections -Wl,--gc-sections \
+		-Wall -fno-strict-aliasing -fshort-enums \
+		-mthumb -mabi=aapcs \
+		--specs=nano.specs \
+        -Tnrf52832_xxaa.ld \
+		-DNRF52 \
+		-DNRF52832_XXAA \
+        -L. \
+        -mcpu=cortex-m4 -march=armv7e-m \
+		-mfloat-abi=hard -mfpu=fpv4-sp-d16 \
+        system_nrf52.c -c -o system_nrf52.o
+
+/c/work/gcc10/bin/arm-none-eabi-c++ \
+        -Os -g3 -fdata-sections -ffunction-sections -Wl,--gc-sections \
+		-Wall -fno-strict-aliasing -fshort-enums \
+        -fcoroutines -std=gnu++20 -fno-exceptions -fno-rtti \
+		-mthumb -mabi=aapcs \
+		--specs=nano.specs \
+        -Tnrf52832_xxaa.ld \
+		-DNRF52 \
+		-DNRF52832_XXAA \
+        -L. \
+        -mcpu=cortex-m4 -march=armv7e-m \
+		-mfloat-abi=hard -mfpu=fpv4-sp-d16 \
+        ../cppcoro/main.cpp myprintf.cc ./async.cc gcc_startup_nrf52.S system_nrf52.o -o test.elf
+
+/c/work/gcc10/bin/arm-none-eabi-size.exe test.elf
+
+/c/work/gcc10/bin/arm-none-eabi-objdump -d test.elf > test.lst
+
+/c/qemu/qemu-system-arm -machine netduino2 -nographic -monitor null \
+    -semihosting -semihosting-config enable=on,target=native,chardev=io -chardev stdio,id=io \
+    -kernel /c/work/dom/cppcoro/test.elf
