@@ -6,38 +6,31 @@
 #include "common.h"
 #include "nrf.h"
 
-FLASH_FUNC
-static void memCopyAligned_F(void* dst, const void* src, size_t size) {
-	uint32_t* d = dst;
-	const uint32_t* s = src;
-	uint32_t* e = (uint32_t*)((uint8_t*)dst + size);
-	while (d < e)
-	{
-		*d++ = *s++;
-	}
-}
+#define MS2TICKS(x) ((x) * 1000)
+#define CAUGHT_MIN_DELAY MS2TICKS(1)
+#define CAUGHT_MAX_DELAY MS2TICKS(17)
 
-static void memCopyAligned(void* dst, const void* src, size_t size) {
-	uint32_t* d = dst;
-	const uint32_t* s = src;
-	uint32_t* e = (uint32_t*)((uint8_t*)dst + size);
-	while (d < e)
-	{
-		*d++ = *s++;
-	}
-}
+#define BLOCK_SIZE 128
 
-FLASH_FUNC
-static void memZeroAligned_F(void* dst, size_t size) {
-	uint32_t* d = dst;
-	uint32_t* e = (uint32_t*)((uint8_t*)dst + size);
-	while (d < e)
-	{
-		*d++ = 0;
-	}
-}
+#define STACK_SIZE 512
+#define APP_SIZE (RAM_SIZE - 768)
 
-FLASH_FUNC
+typedef ;
+
+#define APP_BLOCKS (APP_SIZE / BLOCK_SIZE)
+
+__attribute__((section(".app_region")))
+uint8_t appRegion[APP_BLOCKS * BLOCK_SIZE];
+
+void appEntry(void* connInfo, const void* key) __attribute__((alias("appRegion")));
+
+uint8_t appValidMask[(APP_BLOCKS + 7) / 8];
+
+#pragma region Initialization
+
+NOINIT_DATA
+uint32_t stack[STACK_SIZE / 4];
+
 void Reset_Handler()
 {
 	int main();
@@ -48,18 +41,23 @@ void Reset_Handler()
 	extern uint32_t __size_rambss;
 
 	memCopyAligned_F(&__begin_code_ram_dst, &__begin_code_ram_src, (size_t)&__size_to_copy);
-	// TODO: No need for a new function, because memset is available at this point
 	memZeroAligned_F(&__begin_rambss, (size_t)&__size_rambss);
 
 	//SystemInit();
 
 	main();
+
+	{
+		uint32_t connInfo[4];
+		memcpy(&connInfo, randData.connId, 16);
+		appEntry(connInfo, conf.key);
+	}
 }
 
 __attribute__((used))
 __attribute__((section(".isr_vector")))
 const void* __isr_vector[ISR_VECTOR_ITEMS] = {
-	(void*)BEGIN_STACK,
+	&stack[sizeof(stack) / sizeof(stack[0]) - 1],
 	Reset_Handler,
 	// Magic values to detect valid bootloader binary before uploading.
 	// They will be replaced by the application ISR vectors.
@@ -67,6 +65,10 @@ const void* __isr_vector[ISR_VECTOR_ITEMS] = {
 	(void*)0x2061ac4c, (void*)0x18d4f330, (void*)0x31beca84, (void*)0x11fa6d52,
 };
 
+
+#pragma endregion
+
+#pragma region Configuration
 
 __attribute__((used))
 __attribute__((section(".conf")))
@@ -79,9 +81,11 @@ const struct {
 	.name = "Uninitialized device",
 };
 
+#pragma endregion
 
-FLASH_FUNC
-static void radioInit_F()
+#pragma region Radio
+
+static void radioInit()
 {
 	NRF_RADIO->SHORTS = 0; // TODO:
 	NRF_RADIO->INTENSET = 0; // TODO:
@@ -98,6 +102,14 @@ static void radioInit_F()
 		| (RADIO_PCNF1_WHITEEN_Disabled << RADIO_PCNF1_WHITEEN_Pos);
 }
 
+static int radioRecv(bool useTimeout, uint32_t timeout)
+{
+
+}
+
+#pragma endregion
+
+#pragma region AES
 
 static void doAES(void* data)
 {
@@ -110,23 +122,26 @@ static void doAES(void* data)
 	NRF_ECB->EVENTS_ENDECB = 0;
 }
 
+#pragma endregion
+
+#pragma region Random
 
 static struct {
-	uint32_t key[4];
-	uint32_t plain[4];
-	uint32_t connId[4];
-	uint32_t iv[4];
-} randBuffer;
-static uint8_t* randPtr = (uint8_t*)randBuffer.iv;
-static size_t randBufferIndex = 0;
+	uint8_t key[16];
+	uint8_t plain[16];
+	uint8_t iv[16];
+	uint8_t connId[12];
+	uint32_t cnt;
+} randData;
+static uint8_t* const randPtr = randData.iv;
+static size_t randDataIndex = 0;
 
-FLASH_FUNC
-static void randInit_F()
+static void randPrepare()
 {
 	int i;
-	uint8_t* ptr = (uint8_t*)randBuffer.key;
+	uint8_t* ptr = (uint8_t*)randData.key;
 	NRF_RNG->TASKS_START = 1;
-	for (i = 0; i < sizeof(randBuffer) - 16; i++) {
+	for (i = 0; i < sizeof(randData) - 16; i++) {
 		while (!NRF_RNG->EVENTS_VALRDY) {
 			__WFE();
 		}
@@ -134,13 +149,24 @@ static void randInit_F()
 		*ptr++ = NRF_RNG->VALUE;
 	}
 	NRF_RNG->TASKS_STOP = 1;
-	LONG_JUMP(doAES)(randBuffer.plain);
-	LONG_JUMP(doAES)(randBuffer.key);
+	doAES(randData.plain);
+	doAES(randData.key);
 }
 
+static uint32_t randCaughtDelay()
+{
+	randDataIndex = (randDataIndex + 1) & 15;
+	uint32_t rand = randPtr[randDataIndex];  // Fixed point 0.8
+	uint32_t range = (CAUGHT_MAX_DELAY - CAUGHT_MIN_DELAY) << 8; // Fixed point 15.8
+	uint32_t rand2 = rand * range; // Fixed point 15.16
+	return CAUGHT_MIN_DELAY + (rand2 >> 16); // Fixed point 15.0
+}
 
-FLASH_FUNC
-static void timerInit_F()
+#pragma endregion
+
+#pragma region Timer
+
+static void timerInit()
 {
 	NRF_TIMER0->BITMODE = TIMER_BITMODE_BITMODE_32Bit << TIMER_BITMODE_BITMODE_Pos;
 	NRF_TIMER0->PRESCALER = 4;
@@ -153,42 +179,20 @@ static uint32_t timerGet()
 	return NRF_TIMER0->CC[0];
 }
 
-
-FLASH_FUNC
-static uint32_t randCaughtDelay_F()
-{
-	#define MS2TICKS(x) ((x) * 1000)
-	#define CAUGHT_MIN_DELAY MS2TICKS(1)
-	#define CAUGHT_MAX_DELAY MS2TICKS(17)
-	uint32_t rand = randPtr[randBufferIndex];
-	randBufferIndex = (randBufferIndex + 1) & 15;
-	uint32_t range = (CAUGHT_MAX_DELAY - CAUGHT_MIN_DELAY) << 8;
-	return CAUGHT_MIN_DELAY + ((rand * range) >> 16);
-}
-
-
-void mainLoop()
-{
-	while (true) {
-
-	};
-}
+#pragma endregion
 
 enum {
 	PACKET_TYPE_CATCH = 0,
 	PACKET_TYPE_CAUGHT = 1,
-	PACKET_TYPE_RUN = 2,
-	PACKET_TYPE_RUNNING = 3,
-	PACKET_TYPE_REQUEST = 4,
-	PACKET_TYPE_RESPONSE = 5,
-	PACKET_TYPE_TIMEOUT = 0xFF,
+	PACKET_TYPE_REQUEST = 2,
+	PACKET_TYPE_RESPONSE = 3,
+	PACKET_TYPE_TIMEOUT = 0x100,
 };
 
 uint8_t *radioPacket;
 size_t radioPacketLen;
 bool caughtSend = false;
 
-FLASH_DATA
 const uint8_t packetCatch[11] = {
 	PACKET_TYPE_CATCH,
 	0x11, 0x79, 0x15, 0xac, 0xfe, 0x7b, 0x4e, 0x1d, 0x2a, 0x77,
@@ -199,120 +203,102 @@ const uint8_t packetCatch[11] = {
 #define AES_DCTF_ENCRYPT 0
 #define AES_DCTF_DECRYPT 48
 
-uint8_t packetRun[1 + 8 + ENCRYPT_ADDED];
-
-bool radioRecv(uint32_t maxTime)
-{
-	return NRF_TIMER0->CC[0];
-}
-
-#define timerGet_L LONG_JUMP(timerGet)
-#define memcmp_L LONG_JUMP(memcmp)
-
-__attribute__((noinline))
-FLASH_FUNC
-static uint32_t radioRecvCatchOrBootloader_F(uint32_t timeout)
-{
-	uint32_t endTime = timerGet_L() + timeout;
-	while (true) {
-		if (!radioRecv(endTime))
-		{
-			return PACKET_TYPE_TIMEOUT;
-		}
-		else if (radioPacketLen >= sizeof(packetCatch)
-			&& memcmp_L(radioPacket, packetCatch, sizeof(packetCatch)) == 0)
-		{
-			break;
-		}
-		else if (caughtSend
-			&& radioPacketLen >= sizeof(packetRun)
-			&& memcmp_L(radioPacket, packetRun, sizeof(packetRun)) == 0)
-		{
-			break;
-		}
-	}
-	return radioPacket[0];
-}
-
 
 void aes_dctf(uint8_t* data, size_t size, uint32_t mode, const uint8_t* iv){}
 
-uint8_t caughtPacket[1 + 8 + sizeof(conf.name) + 16 + ENCRYPT_ADDED];
-size_t caughtPacketLen;
+uint8_t caughtPacket[48];
 
-uint8_t runningPacket[1 + 16 + ENCRYPT_ADDED];
 
-static void encryptPacket(uint8_t* iv, uint8_t* buffer, size_t len)
+static void encryptPacket(uint8_t* packet, uint8_t* iv, size_t offset, size_t len)
 {
-	memset(&buffer[len], 0, ENCRYPT_ADDED);
-	aes_dctf(buffer, len + ENCRYPT_ADDED, AES_DCTF_ENCRYPT, iv);
+	uint8_t* from = packet;
+	uint8_t* to = &packet[offset + len];
+	uint8_t* end = from + 12;
+
+	while (from < end) {
+		*to++ = *from++;
+	}
+	aes_dctf(&packet[offset], len + 12, AES_DCTF_ENCRYPT, iv);
 }
 
-__attribute__((noinlie))
-FLASH_FUNC
-static void prepareCaughtPacket_F()
+
+static void prepareCaughtPacket()
 {
 	uint32_t id[2];
 	id[0] = NRF_FICR->DEVICEADDR[0];
 	id[1] = NRF_FICR->DEVICEADDR[1] & 0xFFFF;
 
-	randInit_F();
+	/* Offset Size   Content
+	 * ------ ----   -------
+	 * 0      1      PACKET_TYPE_CAUGHT
+	 * 1      1      Reserved, always 0
+	 * 2      6      device id
+	 * 8      12     iv
+	 * 20     12     conn_id
+	 * 32     4      cnt
+	 * 36     12     verification data: copy of beginning
+	 * 48     -      [size]
+	 */
 
 	caughtPacket[0] = PACKET_TYPE_CAUGHT;
-	memcpy(&caughtPacket[1], id, 8);
-	size_t nameLen = conf.nameLength <= sizeof(conf.name) ? conf.nameLength : 0;
-	memcpy(&caughtPacket[1 + 8], conf.name, nameLen);
-	memcpy(&caughtPacket[1 + 8 + nameLen], randBuffer.iv, 16);
-	encryptPacket(randBuffer.iv, &caughtPacket[1 + 8 + 16 + nameLen], 0);
-
-	packetRun[0] = PACKET_TYPE_RUN;
-	memcpy(&packetRun[1], id, 8);
-	randBuffer.iv[0] ^= 1;
-	encryptPacket(randBuffer.iv, &packetRun[1], 8);
-
-	runningPacket[0] = PACKET_TYPE_RUNNING;
-	memcpy(&runningPacket[1], randBuffer.connId, 16);
-	randBuffer.iv[0] ^= 3;
-	encryptPacket(randBuffer.iv, &runningPacket[1], 16);
-}
-
-void radioSendCaughtPacket()
-{
-	prepareCaughtPacket_F();
+	caughtPacket[1] = 0;
+	memcpy(&caughtPacket[2], id, 6);
+	memcpy(&caughtPacket[8], &randData.iv[4], 12 + 12 + 4);
+	encryptPacket(caughtPacket, &caughtPacket[4], 20, 12 + 4);
 }
 
 
-bool appValid = false;
+bool appValid = false; // TODO: detect at startup
 
-FLASH_FUNC
-int main()
+#define IDLE_TIMEOUT MS2TICKS(200)
+#define CAUGHT_DELAY_TIMEOUT_MIN MS2TICKS(1)
+#define CAUGHT_DELAY_TIMEOUT_MAX MS2TICKS(18)
+#define CAUGHT_TIMEOUT MS2TICKS(1000)
+#define RUNNING_TIMEOUT MS2TICKS(9000)
+
+uint32_t randCaughtDelay()
 {
-    int i;
-    enum { IDLE_DELAY, CATCH_DELAY } state = IDLE_DELAY;
-    uint32_t longTimeout = 1000;
-    uint32_t timeout = longTimeout;
+	return CAUGHT_DELAY_TIMEOUT_MIN + randGet32() % (CAUGHT_DELAY_TIMEOUT_MAX - CAUGHT_DELAY_TIMEOUT_MIN + 1);
+}
 
-    randInit_F();
-    radioInit_F();
-    timerInit_F();
-    prepareCaughtPacket_F();
+void stateMachine()
+{
+	enum { IDLE = 0, CAUGHT_DELAY = 1, CAUGHT = 2, RUNNING = 3 } state = IDLE;
+	uint32_t timeout = IDLE_TIMEOUT;
+	do {
+		PacketType type = radioRecv(appValid || state == CAUGHT_DELAY, timeout);
+		if (type == PACKET_TYPE_TIMEOUT) {
+			if (state == CAUGHT_DELAY) {
+				sendCaughtPacket();
+				timeout = CAUGHT_TIMEOUT;
+				state = CAUGHT;
+			} else {
+				startFlashApp();
+			}
+		} else if (type == PACKET_TYPE_CATCH) {
+			if (state & 1) { // CAUGHT_DELAY or RUNNING
+				continue;
+			} else {
+				if (state == IDLE) {
+					randPrepare();
+					prepareCaughtPacket();
+				}
+				timeout = radioTime() + randCaughtDelay();
+				state = CAUGHT_DELAY;
+			}
+		} else if (type == PACKET_TYPE_REQUEST) {
+			if (executeRequest()) {
+				return;
+			}
+			timeout = radioTime() + RUNNING_TIMEOUT;
+			state = RUNNING;
+		}
+	} while (true);
+}
 
-    do {
-        uint32_t type = radioRecvCatchOrBootloader_F(timeout);
-        if (type == PACKET_TYPE_RUN) {
-            break;
-        } else if (type == PACKET_TYPE_CATCH) {
-            state = CATCH_DELAY;
-            timeout = randCaughtDelay_F();
-        } else if (state == CATCH_DELAY) {
-            radioSendCaughtPacket(); // also prepares 'run bootloader' to compare later
-            state = IDLE_DELAY;
-            timeout = longTimeout;
-        } else if (state == IDLE_DELAY && appValid) {
-            //deviceSoftReset();
-        }
-    } while (true);
-    
-
-	LONG_JUMP(mainLoop)();
+void main()
+{
+    radioInit();
+    timerInit();
+	stateMachine();
 }

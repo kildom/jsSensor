@@ -6,15 +6,7 @@
 #include <stdbool.h>
 #include <string.h>
 
-#define FLASH_FUNC __attribute__((section(".flashtext")))
-#define FLASH_DATA __attribute__((section(".flashrodata")))
 #define NOINIT_DATA __attribute__((section(".noinit")))
-
-#define FORCE_LONG_JUMP(func) ((typeof(&(func)))_LONG_JUMP_helper(&(func)))
-static inline void* _LONG_JUMP_helper(void* p) {
-	__asm__ volatile ("":"+r"(p));
-	return p;
-}
 
 extern uint8_t __begin_boot_flash;
 extern uint8_t __size_boot_flash;
