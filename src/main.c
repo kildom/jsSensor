@@ -124,6 +124,36 @@ static void doAES(void* data)
 
 #pragma endregion
 
+/*
+
+Startup procedure (before C startup):
+	if reset reason == power on then goto boot
+	if app invalid (APP_AREA[0..1] == 0xFFFFFFFFFFFF) then goto boot
+	start app
+
+start app on nRF52:
+	// BOOT_ISR_VECT covers only first two vectors
+	VTOR = &APP_ISR_VECT[0]
+	change SP = APP_ISR_VECT[0]
+	change PC = APP_ISR_VECT[1]
+
+start app on nRF51 (alternative with faster ISR entry):
+	if (BOOT_ISR_VECT[2..N] != APP_ISR_VECT[2..N])
+		memcpy: buffer = BOOT_ISR_VECT[0..1] & APP_ISR_VECT[2..N] & rest_of_bootloader_flash
+		jump to executing from RAM
+		erase bootloader pages
+		memcpy: bootloader = buffer
+		jump back to FLASH
+	change SP = APP_ISR_VECT[0]
+	change PC = APP_ISR_VECT[1]
+
+start app on nRF51 (safer alternative):
+	// BOOT_ISR_VECT[2..N] points to one function that reads APP_ISR_VECT and jumps to actual implementation.
+	change SP = APP_ISR_VECT[0]
+	change PC = APP_ISR_VECT[1]
+	
+*/
+
 #pragma region Random
 
 static struct {
