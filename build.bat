@@ -8,7 +8,7 @@
 :: Uncomment and fill following lines or provide following variables before
 :: running this script.
 :::: Directory containing C compiler "arm-none-eabi-gcc".
-::set GCC_ARM_BIN_DIR=
+set GCC_ARM_BIN_DIR=C:\work\bin\gcc\bin
 :::: Directory containing nrfx
 ::set NRFX_DIR=
 :::: Directory containing CMSIS
@@ -17,7 +17,7 @@
 ::set NRFJPROG_DIR=
 
 
-set TARGET=blinky
+set TARGET=recovery-bootloader
 
 
 goto main
@@ -29,22 +29,26 @@ goto main
     call :find_NRFX   || goto error
     call :find_CMSIS  || goto error
 
-    set SOURCE_FILES=.\src\main.c ^
-        %NRFX%\mdk\gcc_startup_nrf5340_application.S ^
-        %NRFX%\mdk\system_nrf5340_application.c
+    set SOURCE_FILES=.\src\main.c
     set INCLUDE=-I%NRFX%\mdk -I%CMSIS%
-    set LIBS=-L%NRFX%\mdk
-    set CFLAGS=-O0 -g3 -fdata-sections -ffunction-sections -Wl,--gc-sections ^
+    set LIBS=-L.\src
+    set CFLAGS=-O3 -g3 -fdata-sections -ffunction-sections -Wl,--gc-sections ^
+        -Wno-unknown-pragmas ^
         -Wall -fno-strict-aliasing -fshort-enums ^
-        -D__HEAP_SIZE=65536 -D__STACK_SIZE=65536 ^
-        -mthumb -mabi=aapcs -Tnrf5340_xxaa_application.ld ^
-        -mcpu=cortex-m33 -march=armv8-m.main+dsp ^
-        -DNRF5340_XXAA_APPLICATION
+        -D__HEAP_SIZE=512 -D__STACK_SIZE=1024 ^
+        -mthumb -mabi=aapcs ^
+		--specs=nosys.specs -nostdlib ^
+        -mcpu=cortex-m0 ^
+		-mfloat-abi=soft ^
+		-Tnrf51822_xxaa.ld ^
+		-DNRF51 ^
+		-DNRF51822_XXAA
         
     echo Compiling %TARGET%...
     %CC% %CFLAGS% %INCLUDE% %LIBS% %SOURCE_FILES% -Wl,-Map=%TARGET%.map -o %TARGET%.elf || goto error
     %OBJDUMP% -d %TARGET%.elf > %TARGET%.lst                                            || goto error
     %OBJCOPY% -O ihex %TARGET%.elf %TARGET%.hex                                         || goto error
+    %SIZE% %TARGET%.elf
     echo Success
     %PAUSE%
 
@@ -80,6 +84,7 @@ goto :EOF
     set CC="%~1%2"
     set OBJCOPY="%~1%objcopy"
     set OBJDUMP="%~1%objdump"
+    set SIZE="%~1%size"
 goto :EOF
 
 :find_CC
