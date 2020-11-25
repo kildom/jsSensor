@@ -6,3 +6,5 @@
 /CMSIS/
 /nrfx/
 *.bin
+
+/recovery-bootloader.c

@@ -29,31 +29,49 @@ goto main
     call :find_NRFX   || goto error
     call :find_CMSIS  || goto error
 
-    set SOURCE_FILES=.\src\main.c
+    set SOURCE_FILES=.\src\main.c .\src\startup.c .\src\conf.c .\src\utils.c
     set INCLUDE=-I%NRFX%\mdk -I%CMSIS%
     set LIBS=-L.\src
-    set CFLAGS=-O3 -g3 -fdata-sections -ffunction-sections -Wl,--gc-sections ^
-        -Wno-unknown-pragmas ^
-        -Wall -fno-strict-aliasing -fshort-enums ^
-        -D__HEAP_SIZE=512 -D__STACK_SIZE=1024 ^
-        -mthumb -mabi=aapcs ^
+    set CFLAGS=-Os -g3 -fdata-sections ^
+        -I./src ^
+        -ffunction-sections -Wl,--gc-sections ^
+        -Wno-unused-function -Wno-main ^
+		-Wall -fno-strict-aliasing -fshort-enums ^
+		-mthumb -mabi=aapcs ^
 		--specs=nosys.specs -nostdlib ^
-        -mcpu=cortex-m0 ^
+		-mcpu=cortex-m0 ^
 		-mfloat-abi=soft ^
-		-Tnrf51822_xxaa.ld ^
+		-Tlinker.ld ^
+        -Wl,--defsym=_LS_RAM_APP_SIZE=0x3DC0 ^
+        -Wl,--defsym=_LS_RAM_SIZE=0x4000 ^
 		-DNRF51 ^
-		-DNRF51822_XXAA
-        
+		-DNRF51822_XXAA ^
+        -DWITH_SOFT_DEVICE ^
+        -DDUMMY_LTO
+
+    echo. > %TARGET%.c
+    call :add_source .\src\main.c 
+    call :add_source .\src\startup.c 
+    call :add_source .\src\conf.c 
+    call :add_source .\src\utils.c
+    call :add_source .\src\crypto.c
+
     echo Compiling %TARGET%...
-    %CC% %CFLAGS% %INCLUDE% %LIBS% %SOURCE_FILES% -Wl,-Map=%TARGET%.map -o %TARGET%.elf || goto error
+    %CC% %CFLAGS% %INCLUDE% %LIBS% %TARGET%.c -Wl,-Map=%TARGET%.map -o %TARGET%.elf || goto error
     %OBJDUMP% -d %TARGET%.elf > %TARGET%.lst                                            || goto error
-    %OBJCOPY% -O ihex %TARGET%.elf %TARGET%.hex                                         || goto error
-    %SIZE% %TARGET%.elf
+    %OBJCOPY% -O ihex -j .text %TARGET%.elf %TARGET%.hex                                         || goto error
     echo Success
     %PAUSE%
 
 goto :EOF
 
+:add_source
+    set FULL_PATH="%~dpnx1"
+    echo. >> %TARGET%.c
+    echo #line 1 %FULL_PATH:\=/% >> %TARGET%.c
+    type %1 >> %TARGET%.c
+    echo. >> %TARGET%.c
+    goto :EOF
 
 :clean
     echo Cleaning %TARGET%...
