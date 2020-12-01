@@ -18,11 +18,10 @@ OUTPUT_FORMAT ("elf32-littlearm", "elf32-bigarm", "elf32-littlearm")
 
 SECTIONS
 {
-    _LS_RAM_USAGE = 128;
+    _LS_RAM_USAGE = 648;
     _LS_STACK_SIZE = 512;
 
     _LS_BL_MBR_COPY = 0x800;
-    _LS_BL_START = 0x808;
     _LS_BL_CONF = 0xFB0;
     _LS_BL_MBR_CONF = 0xFF0;
 
@@ -32,7 +31,6 @@ SECTIONS
         KEEP(*(.isr_vector))
         . = _LS_BL_MBR_COPY;
         KEEP(*(.mbr_reset_copy))
-        . = _LS_BL_START;
         *(.text*)
         *(.rodata*)
         . = _LS_BL_CONF;

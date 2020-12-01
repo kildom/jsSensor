@@ -24,9 +24,19 @@ __attribute__((naked))
 __attribute__((noinline))
 __attribute__((noreturn))
 __attribute__((section(".ramapp")))
-void ramAppStartup(void* connInfo, const void* key)
+void ramAppStartup(void* connInfo)
 {
 	__asm__ volatile ("");
+	__builtin_unreachable();
+}
+
+__attribute__((noinline))
+__attribute__((noreturn))
+void startRamApp()
+{
+	uint32_t buf[4];
+	copyMem((uint8_t*)&buf, getConnState(), sizeof(buf));
+	FORCE_LONG_JUMP(ramAppStartup)(buf);
 	__builtin_unreachable();
 }
 
@@ -46,12 +56,8 @@ static void prepare()
 		);
 		__builtin_unreachable();
 	}
-	zeroMem(&__begin_rambss, &__end_rambss);
+	zeroMem(&__begin_rambss, &__end_rambss - &__begin_rambss);
 }
-
-EXTERN void aes_dcfb_key(const uint8_t* key);
-EXTERN void aes_dcfb(uint8_t* data, size_t size, uint32_t mode, const uint8_t* iv);
-EXTERN void aes_hash(const uint8_t* data, size_t size, uint8_t* hash);
 
 __attribute__((noreturn))
 static int resetHandler()
@@ -60,12 +66,12 @@ static int resetHandler()
 
     main();
 
-	FORCE_LONG_JUMP(ramAppStartup)(aes_dcfb, aes_hash); // TODO: Fill with actual pointers
-
-	__builtin_unreachable();
+	startRamApp();
 }
 
-void startMbr()
+__attribute__((noreturn))
+EXTERN void startMbr()
 {
 	SCB->AIRCR = SCB_AIRCR_SYSRESETREQ_Msk | (0x05FA << SCB_AIRCR_VECTKEY_Pos);
+	while (true) { }
 }

@@ -42,22 +42,22 @@ static void aes_dcfb_block(uint8_t* data, size_t size, uint32_t mode)
     uint8_t* buffer2 = &aes_buffer[KEY2 - mode];
     do_aes(buffer1); // buffer1 contains key=first_key, plain=iv
     do_xor(data, &buffer1[CT], size);
-    copyMemSize(&buffer1[PT], data, size);
+    copyMem(&buffer1[PT], data, size);
     do_aes(buffer2); // buffer2 contains key=second_key, plain=iv
     do_xor(data, &buffer2[CT], size);
-    copyMemSize(&buffer2[PT], &buffer1[PT], size);
+    copyMem(&buffer2[PT], &buffer1[PT], size);
 }
 
 EXTERN void aes_dcfb_key(const uint8_t* key)
 {
-    copyMemSize(&aes_buffer[KEY1], key, 16);
-    copyMemSize(&aes_buffer[KEY2], &key[16], 16);
+    copyMem(&aes_buffer[KEY1], key, 16);
+    copyMem(&aes_buffer[KEY2], &key[16], 16);
 }
 
 EXTERN void aes_dcfb(uint8_t* data, size_t size, uint32_t mode, const uint8_t* iv)
 {
-    copyMemSize(&aes_buffer[PT1], iv, 16);
-    copyMemSize(&aes_buffer[PT2], iv, 16);
+    copyMem(&aes_buffer[PT1], iv, 16);
+    copyMem(&aes_buffer[PT2], iv, 16);
     while (size > 0)
     {
         size_t this_size = (size > 16) ? 16 : size;
@@ -69,14 +69,14 @@ EXTERN void aes_dcfb(uint8_t* data, size_t size, uint32_t mode, const uint8_t* i
 
 static void aes_hash_block(const uint8_t* data, size_t size)
 {
-    copyMemSize(&aes_buffer[HASH_IN1], data, size);
+    copyMem(&aes_buffer[HASH_IN1], data, size);
     do_xor(&aes_buffer[HASH_IN2], &aes_buffer[HASH_OUT], 16);
     do_aes(&aes_buffer[HASH_IN1]);
 }
 
 EXTERN void aes_hash(const uint8_t* data, size_t size, uint8_t* hash)
 {
-    zeroMemSize(&aes_buffer[HASH_IN1], 48);
+    zeroMem(&aes_buffer[HASH_IN1], 48);
     while (size > 0)
     {
         size_t this_size = (size > 32) ? 32 : size;
@@ -84,5 +84,5 @@ EXTERN void aes_hash(const uint8_t* data, size_t size, uint8_t* hash)
         size -= this_size;
         data += this_size;
     }
-    copyMemSize(hash, &aes_buffer[HASH_OUT], 16);
+    copyMem(hash, &aes_buffer[HASH_OUT], 16);
 }

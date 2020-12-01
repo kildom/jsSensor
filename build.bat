@@ -55,6 +55,10 @@ goto main
     call :add_source .\src\conf.c 
     call :add_source .\src\utils.c
     call :add_source .\src\crypto.c
+    call :add_source .\src\radio.c
+    call :add_source .\src\timer.c
+    call :add_source .\src\rand.c
+    call :add_source .\src\packet.c
 
     echo Compiling %TARGET%...
     %CC% %CFLAGS% %INCLUDE% %LIBS% %TARGET%.c -Wl,-Map=%TARGET%.map -o %TARGET%.elf || goto error

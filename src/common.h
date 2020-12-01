@@ -31,7 +31,12 @@ static inline void* _LONG_JUMP_helper(void* p) {
 #undef __unix
 #endif
 
+#include "main.h"
 #include "utils.h"
 #include "crypto.h"
+#include "startup.h"
+#include "radio.h"
+#include "timer.h"
+#include "rand.h"
 
 #endif

@@ -1,8 +1,9 @@
 
 #include "common.h"
 
-EXTERN void zeroMem(uint8_t* dst, uint8_t* dstEnd)
+EXTERN void zeroMem(uint8_t* dst, size_t size)
 {
+    uint8_t* dstEnd = dst + size;
 	while (dst < dstEnd)
 	{
 		*dst = 0;
@@ -10,13 +11,9 @@ EXTERN void zeroMem(uint8_t* dst, uint8_t* dstEnd)
 	}
 }
 
-EXTERN void zeroMemSize(uint8_t* dst, size_t size)
+EXTERN void copyMem(uint8_t* dst, const uint8_t* src, size_t size)
 {
-    zeroMem(dst, dst + size);
-}
-
-EXTERN void copyMem(uint8_t* dst, const uint8_t* src, uint8_t* dstEnd)
-{
+    uint8_t* dstEnd = dst + size;
 	while (dst < dstEnd)
 	{
 		*dst = *src;
@@ -25,9 +22,17 @@ EXTERN void copyMem(uint8_t* dst, const uint8_t* src, uint8_t* dstEnd)
 	}
 }
 
-EXTERN void copyMemSize(uint8_t* dst, const uint8_t* src, size_t size)
+EXTERN bool compareMem(const uint8_t* a, const uint8_t* b, size_t size)
 {
-    copyMem(dst, src, dst + size);
+    const uint8_t* bEnd = b + size;
+	while (b < bEnd)
+	{
+		if (*a != *b)
+		{
+			return false;
+		}
+		a++;
+        b++;
+	}
+	return true;
 }
-
-

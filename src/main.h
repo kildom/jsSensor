@@ -3,4 +3,7 @@
 
 EXTERN void main();
 
+__attribute__((noreturn))
+EXTERN void shutdown();
+
 #endif
