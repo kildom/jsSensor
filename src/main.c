@@ -14,6 +14,7 @@ static uint32_t randCaughtDelay()
 
 static void stateMachine()
 {
+	PacketType type;
 	enum { IDLE = 0, CAUGHT_DELAY = 1, CAUGHT = 2, RUNNING = 3 } state = IDLE;
 	uint32_t timeout = IDLE_TIMEOUT;
 	do {
@@ -31,11 +32,11 @@ static void stateMachine()
 				if (state & 1) { // CAUGHT_DELAY or RUNNING
 					continue;
 				} else {
-					timeout = recvTime() + randCaughtDelay();
+					timeout = getRecvTime() + randCaughtDelay();
 					state = CAUGHT_DELAY;
 				}
 			} else if (type == PACKET_TYPE_REQUEST) {
-				timeout = recvTime() + RUNNING_TIMEOUT;
+				timeout = getRecvTime() + RUNNING_TIMEOUT;
 				state = RUNNING;
 			} else if (type == PACKET_TYPE_REQUEST_START) {
 				return;

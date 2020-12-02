@@ -58,7 +58,8 @@ goto main
     call :add_source .\src\radio.c
     call :add_source .\src\timer.c
     call :add_source .\src\rand.c
-    call :add_source .\src\packet.c
+    call :add_source .\src\conn.c
+    call :add_source .\src\req.c
 
     echo Compiling %TARGET%...
     %CC% %CFLAGS% %INCLUDE% %LIBS% %TARGET%.c -Wl,-Map=%TARGET%.map -o %TARGET%.elf || goto error

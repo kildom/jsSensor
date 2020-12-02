@@ -17,7 +17,7 @@
 #define NOINIT_DATA __attribute__((section(".noinit")))
 
 #define BLOCK_SIZE 128
-#define RADIO_FREQUENCY_MHZ 2478
+#define MAX_PACKET_SIZE (BLOCK_SIZE + 16)
 
 #define ARRAY_LEN(arr) (sizeof(arr) / sizeof((arr)[0]))
 
@@ -38,5 +38,7 @@ static inline void* _LONG_JUMP_helper(void* p) {
 #include "radio.h"
 #include "timer.h"
 #include "rand.h"
+#include "conn.h"
+#include "req.h"
 
 #endif

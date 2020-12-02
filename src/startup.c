@@ -35,7 +35,7 @@ __attribute__((noreturn))
 void startRamApp()
 {
 	uint32_t buf[4];
-	copyMem((uint8_t*)&buf, getConnState(), sizeof(buf));
+	copyMem((uint8_t*)&buf, NULL/*TODO: getConnState()*/, sizeof(buf));
 	FORCE_LONG_JUMP(ramAppStartup)(buf);
 	__builtin_unreachable();
 }
