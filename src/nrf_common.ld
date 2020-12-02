@@ -1,6 +1,6 @@
 OUTPUT_FORMAT ("elf32-littlearm", "elf32-bigarm", "elf32-littlearm")
 
-ENTRY(Reset_Handler)
+ENTRY(resetHandler)
 
 SECTIONS
 {
@@ -19,8 +19,9 @@ SECTIONS
 
     .app :
     {
-        KEEP(*(.app*))
-    }
+        KEEP(*(.app_entry*))
+        KEEP(*(.app_area*))
+    } > RAM
 
     .bss :
     {
